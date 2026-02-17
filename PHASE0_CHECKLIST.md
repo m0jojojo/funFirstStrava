@@ -6,30 +6,33 @@
 - [x] **Git**: Repository initialized; root `.gitignore` for Flutter + Node added
 - [x] **Node.js**: Verified installed (v24.11.1)
 - [x] **Git**: Verified installed (2.44.0)
+- [x] **PATH**: Flutter and PostgreSQL `bin` added to user PATH (see paths below)
+
+## Installed locations (already on PATH)
+
+| Tool        | Path |
+|------------|------|
+| **Flutter** | `C:\Program Files\flutter` → `bin` in PATH |
+| **PostgreSQL 18** | `C:\Program Files\PostgreSQL\18` → use `bin` in PATH |
+
+**PostgreSQL**: `psql --version` verified (18.2).
+
+**Flutter**: Open a **new** terminal (so PATH is reloaded) and run `flutter doctor`.
 
 ## What you must do manually
 
-### 1. Install Flutter (required for mobile app)
+### 1. Verify Flutter (in a new terminal)
 
-- **Current status**: `flutter` not found in PATH.
-- **Install**: https://docs.flutter.dev/get-started/install/windows  
-  (e.g. download SDK, extract, add `flutter\bin` to PATH.)
-- **Verify**:
+- PATH is already set. Open a **new** PowerShell or CMD window and run:
   ```powershell
   flutter doctor
   ```
   Resolve any reported issues (Android Studio, licenses, etc.).
 
-### 2. Install PostgreSQL 15+ with PostGIS (required for backend)
+### 2. PostGIS (required for backend Phase 2)
 
-- **Current status**: `psql` not found in PATH.
-- **Install**: https://www.postgresql.org/download/windows/  
-  During setup, add PostgreSQL `bin` to PATH.
-- **PostGIS**: Install via Stack Builder (with PostgreSQL) or https://postgis.net/install/.
-- **Verify**:
-  ```powershell
-  psql --version
-  ```
+- PostgreSQL 18 is installed and on PATH.
+- **PostGIS**: Install via Stack Builder (run from Start Menu after PostgreSQL install) or https://postgis.net/install/.
 - **Create DB when starting Phase 2**:
   ```sql
   CREATE DATABASE territory_game;
