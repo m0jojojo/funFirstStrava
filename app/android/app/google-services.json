@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "626019867864",
+    "project_id": "funfirststrava",
+    "storage_bucket": "funfirststrava.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:626019867864:android:313f142a915f2627424bad",
+        "android_client_info": {
+          "package_name": "com.territorygame.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "626019867864-cht3pb8dppc577um85e1qft3vkbcldbn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.territorygame.app",
+            "certificate_hash": "1322951091e0a6f9d95b2a1d60fbf7e2295ea28e"
+          }
+        },
+        {
+          "client_id": "626019867864-avta6kvglivpdp0j4l156t65ebace7tl.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBmkjlODagVgqmZlbLcQesiIt9eqa8Ayc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "626019867864-78cuqeh9bc72u5lfckheo35nh9nvc68u.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
