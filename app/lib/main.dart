@@ -1,11 +1,18 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'features/auth/login_screen.dart';
 import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Mapbox (Phase 5.2): set token for Android/iOS. Use: flutter run --dart-define ACCESS_TOKEN=your_token
+  if (!kIsWeb) {
+    const token = String.fromEnvironment('ACCESS_TOKEN', defaultValue: '');
+    if (token.isNotEmpty) MapboxOptions.setAccessToken(token);
+  }
   runApp(const TerritoryGameApp());
 }
 

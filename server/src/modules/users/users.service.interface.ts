@@ -7,4 +7,5 @@ export interface RegisterResult {
 
 export interface IUsersService {
   register(idToken: string, displayName?: string, email?: string): Promise<RegisterResult>;
+  findByFirebaseUid(firebaseUid: string): Promise<User | null>;
 }

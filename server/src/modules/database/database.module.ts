@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { Run } from '../runs/run.entity';
+import { Tile } from '../tiles/tile.entity';
 import { User } from '../users/user.entity';
 
 @Module({
@@ -15,7 +17,7 @@ import { User } from '../users/user.entity';
         username: process.env.DB_USERNAME ?? 'postgres',
         password: process.env.DB_PASSWORD ?? 'postgres',
         database: process.env.DB_NAME ?? 'territory_game',
-        entities: [User],
+        entities: [User, Tile, Run],
         // NOTE: synchronize is enabled for early development convenience.
         // We will replace this with proper migrations in later phases.
         synchronize: true,

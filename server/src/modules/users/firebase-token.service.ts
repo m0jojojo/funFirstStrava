@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import JwksRsa from 'jwks-rsa';
 
@@ -15,6 +15,7 @@ export interface FirebaseTokenPayload {
  */
 @Injectable()
 export class FirebaseTokenService {
+  private readonly logger = new Logger(FirebaseTokenService.name);
   private _projectId: string | null = null;
   private _jwksClient: JwksRsa.JwksClient | null = null;
 
@@ -39,24 +40,34 @@ export class FirebaseTokenService {
   }
 
   async verifyIdToken(idToken: string): Promise<FirebaseTokenPayload> {
-    const decoded = jwt.decode(idToken, { complete: true });
+    const token = idToken.trim();
+    const decoded = jwt.decode(token, { complete: true });
     if (!decoded || typeof decoded === 'string' || !decoded.header?.kid) {
+      this.logger.warn('Invalid token format: missing or invalid header/kid');
       throw new Error('Invalid token format');
     }
-    const key = await this.jwksClient.getSigningKey(decoded.header.kid);
+    const kid = decoded.header.kid;
+    this.logger.debug(`Verifying token with kid=${kid}`);
+    const key = await this.jwksClient.getSigningKey(kid);
     const publicKey = key.getPublicKey();
     const pid = this.projectId;
-    const payload = jwt.verify(idToken, publicKey, {
-      algorithms: ['RS256'],
-      audience: pid,
-      issuer: `https://securetoken.google.com/${pid}`,
-    }) as jwt.JwtPayload;
-    const sub = payload.sub;
-    if (typeof sub !== 'string') throw new Error('Invalid token: missing sub');
-    return {
-      sub,
-      email: payload.email ?? undefined,
-      name: (payload.name as string | undefined) ?? payload.email?.split('@')[0],
-    };
+    try {
+      const payload = jwt.verify(token, publicKey, {
+        algorithms: ['RS256'],
+        audience: pid,
+        issuer: `https://securetoken.google.com/${pid}`,
+      }) as jwt.JwtPayload;
+      const sub = payload.sub;
+      if (typeof sub !== 'string') throw new Error('Invalid token: missing sub');
+      return {
+        sub,
+        email: payload.email ?? undefined,
+        name: (payload.name as string | undefined) ?? payload.email?.split('@')[0],
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Token verification failed: ${msg} (kid=${kid}, projectId=${pid})`);
+      throw err;
+    }
   }
 }

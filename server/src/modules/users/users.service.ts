@@ -31,4 +31,8 @@ export class UsersService implements IUsersService {
     await this.userRepo.save(user);
     return { user, created: true };
   }
+
+  async findByFirebaseUid(firebaseUid: string): Promise<User | null> {
+    return this.userRepo.findOne({ where: { firebaseUid } });
+  }
 }
