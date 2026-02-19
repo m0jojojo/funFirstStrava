@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { FirebaseTokenService } from './firebase-token.service';
 import { User } from './user.entity';
 import { IUsersService, RegisterResult } from './users.service.interface';
@@ -34,5 +34,10 @@ export class UsersService implements IUsersService {
 
   async findByFirebaseUid(firebaseUid: string): Promise<User | null> {
     return this.userRepo.findOne({ where: { firebaseUid } });
+  }
+
+  async findByIds(ids: string[]): Promise<User[]> {
+    if (ids.length === 0) return [];
+    return this.userRepo.find({ where: { id: In(ids) } });
   }
 }

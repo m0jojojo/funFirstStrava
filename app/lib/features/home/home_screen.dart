@@ -7,6 +7,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../core/api_config.dart';
+import '../../services/auth_service.dart';
+import '../auth/login_screen.dart';
+import '../leaderboard/leaderboard_screen.dart';
 import '../map/map_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -38,6 +41,7 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final authService = AuthService();
     return Scaffold(
       body: Center(
         child: Column(
@@ -80,6 +84,29 @@ class HomeScreen extends StatelessWidget {
       );
     },
     child: const Text('Open map'),
+  ),
+  const SizedBox(height: 12),
+  FilledButton.tonal(
+    onPressed: () {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const LeaderboardScreen(),
+        ),
+      );
+    },
+    child: const Text('Leaderboard'),
+  ),
+  const SizedBox(height: 24),
+  TextButton(
+    onPressed: () async {
+      await authService.signOut();
+      if (!context.mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    },
+    child: const Text('Sign out'),
   ),
 ],
         ),

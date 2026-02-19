@@ -35,6 +35,12 @@ class AuthService {
   final GoogleSignIn _googleSignIn;
   final String _baseUrl;
 
+  /// Sign out from Firebase and Google.
+  Future<void> signOut() async {
+    await _auth.signOut();
+    await _googleSignIn.signOut();
+  }
+
   /// Signs in with Google (all platforms including web). On web, Google may only return an access token; Firebase Auth accepts that and we use [FirebaseUser.getIdToken] for the backend.
   Future<AuthUser> signInWithGoogle() async {
     final googleUser = await _googleSignIn.signIn();

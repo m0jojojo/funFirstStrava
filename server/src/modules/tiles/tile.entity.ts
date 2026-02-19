@@ -1,4 +1,12 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { User } from '../users/user.entity';
 
 @Entity({ name: 'tiles' })
 export class Tile {
@@ -22,6 +30,13 @@ export class Tile {
 
   @Column({ name: 'max_lng', type: 'double precision' })
   maxLng: number;
+
+  @Column({ name: 'owner_id', type: 'uuid', nullable: true })
+  ownerId: string | null;
+
+  @ManyToOne(() => User, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'owner_id' })
+  owner: User | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

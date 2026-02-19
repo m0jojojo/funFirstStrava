@@ -11,18 +11,18 @@ Phase 5 adds the core game world: a map, a grid of capturable tiles (PostGIS), a
 
 ## 5.1 Backend — Tile grid (PostGIS)
 
-- [ ] Create `tiles` table: `id` (uuid), `geometry` (PostGIS geography/polygon), optional `owner_id` (FK to users), `created_at`.
-- [ ] Seed a grid of tiles for a fixed play region (e.g. bounding box; hex or square grid).
-- [ ] `GET /tiles` (or `GET /map/tiles`) — return tiles in a bounding box (GeoJSON or id + bounds).
-- [ ] Add Tile entity, TilesModule, TilesService, env for DB (PostGIS already in use from Phase 2).
+- [x] Create `tiles` table: `id` (uuid), row/col index, min_lat, max_lat, min_lng, max_lng, `created_at` (lat/lng bounds instead of PostGIS geometry; `owner_id` deferred to Phase 6).
+- [x] Seed a grid of tiles for a fixed play region (10×10 square grid around SF).
+- [x] `GET /tiles` — return all tiles (optional bbox filter deferred).
+- [x] Tile entity, TilesModule, TilesService, DB (PostGIS from Phase 2).
 
-**Definition of done**: API returns tile list for a region; tiles visible in DB/PostGIS.
+**Definition of done**: API returns tile list for a region; tiles visible in DB.
 
 ## 5.2 App — Map (Mapbox)
 
 - [x] Add Mapbox dependency (`mapbox_maps_flutter`) and configure access token via `--dart-define ACCESS_TOKEN=...`.
 - [x] New screen: full-screen map (`MapScreen`) centered on default/play region; "Open map" from Home.
-- [ ] (Optional) Request location permission and center on user.
+- [x] (Optional) Request location permission and center on user (flyTo on map open).
 - [x] Document: token from https://account.mapbox.com/access-tokens/; run `flutter run --dart-define ACCESS_TOKEN=your_token`. On web, map shows placeholder (SDK is Android/iOS only).
 
 **Definition of done**: App shows a Mapbox map; can pan/zoom.
@@ -31,7 +31,7 @@ Phase 5 adds the core game world: a map, a grid of capturable tiles (PostGIS), a
 
 - [x] Call `GET /tiles` when map is created and draw tile polygons (FillLayer) on the map.
 - [x] Draw tile geometries as polygons (GeoJSON FeatureCollection → GeoJsonSource + FillLayer; semi-transparent blue).
-- [ ] (Optional) Refresh tiles when map moves (debounced); for now tiles load once on open.
+- [x] (Optional) Refresh tiles when map moves (debounced via map idle); refetch and update GeoJSON source on idle.
 
 **Definition of done**: Map displays tiles from the backend; tiles match DB grid.
 
