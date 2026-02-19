@@ -1,2 +1,2 @@
-/// Base URL for the backend. Use 10.0.2.2:3000 for Android emulator, localhost for desktop/web.
-const String apiBaseUrl = 'http://192.168.1.2:3000';
+/// Base URL for the backend. Replace with your Railway (or other) public URL for phone testing.
+const String apiBaseUrl = 'https://funfirststrava-production.up.railway.app';
