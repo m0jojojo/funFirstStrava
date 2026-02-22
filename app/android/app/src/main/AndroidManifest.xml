@@ -2,6 +2,7 @@
     <!-- Mapbox map (Phase 5.2); optional location for future "center on me" -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:label="app"
         android:name="${applicationName}"

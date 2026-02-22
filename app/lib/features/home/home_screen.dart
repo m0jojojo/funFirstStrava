@@ -1,11 +1,23 @@
 import 'package:flutter/material.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/push_notification_service.dart';
 import '../leaderboard/leaderboard_screen.dart';
 import '../map/map_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    PushNotificationService().sendTokenToBackend();
+  }
 
   @override
   Widget build(BuildContext context) {

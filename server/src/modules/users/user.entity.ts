@@ -11,6 +11,9 @@ export class User {
   @Column()
   username: string;
 
+  @Column({ name: 'fcm_token', type: 'varchar', nullable: true })
+  fcmToken: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

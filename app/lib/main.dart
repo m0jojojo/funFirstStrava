@@ -6,6 +6,7 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'features/auth/login_screen.dart';
 import 'features/home/home_screen.dart';
 import 'firebase_options.dart';
+import 'services/push_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,6 +15,7 @@ void main() async {
   if (!kIsWeb) {
     const token = String.fromEnvironment('ACCESS_TOKEN', defaultValue: '');
     if (token.isNotEmpty) MapboxOptions.setAccessToken(token);
+    await PushNotificationService().initialize();
   }
   runApp(const TerritoryGameApp());
 }

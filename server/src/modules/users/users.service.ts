@@ -40,4 +40,8 @@ export class UsersService implements IUsersService {
     if (ids.length === 0) return [];
     return this.userRepo.find({ where: { id: In(ids) } });
   }
+
+  async updateFcmToken(userId: string, fcmToken: string): Promise<void> {
+    await this.userRepo.update({ id: userId }, { fcmToken });
+  }
 }
