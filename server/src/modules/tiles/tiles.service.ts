@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Tile } from './tile.entity';
 import { TilesGateway } from './tiles.gateway';
+import { PushNotificationService } from '../notifications/push-notification.service';
 import { UsersService } from '../users/users.service';
 
 export interface LeaderboardEntry {
@@ -18,6 +19,7 @@ export class TilesService implements OnModuleInit {
     private readonly tilesRepository: Repository<Tile>,
     private readonly usersService: UsersService,
     private readonly tilesGateway: TilesGateway,
+    private readonly pushService: PushNotificationService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -82,6 +84,7 @@ export class TilesService implements OnModuleInit {
   /**
    * Find tile IDs that contain at least one path point (point-in-rect), then set their owner_id.
    * Phase 6.1: capture tiles when a run passes through them.
+   * Notifies previous owners (whose tiles were captured) via push notification.
    */
   async captureTilesByPath(
     userId: string,
@@ -90,6 +93,7 @@ export class TilesService implements OnModuleInit {
     if (path.length === 0) return;
     const allTiles = await this.tilesRepository.find();
     const tileIdsToCapture = new Set<string>();
+    const previousOwnerByTile = new Map<string, string>();
     for (const point of path) {
       for (const tile of allTiles) {
         if (
@@ -99,6 +103,9 @@ export class TilesService implements OnModuleInit {
           point.lng <= tile.maxLng
         ) {
           tileIdsToCapture.add(tile.id);
+          if (tile.ownerId && tile.ownerId !== userId) {
+            previousOwnerByTile.set(tile.id, tile.ownerId);
+          }
         }
       }
     }
@@ -108,6 +115,26 @@ export class TilesService implements OnModuleInit {
         { ownerId: userId },
       );
       this.tilesGateway.broadcastTilesUpdated(userId, tileIdsToCapture.size);
+
+      const previousOwnerIds = [...new Set(previousOwnerByTile.values())];
+      if (previousOwnerIds.length > 0) {
+        await this.notifyPreviousOwners(previousOwnerIds, userId);
+      }
+    }
+  }
+
+  private async notifyPreviousOwners(previousOwnerIds: string[], attackerId: string): Promise<void> {
+    const users = await this.usersService.findByIds(previousOwnerIds);
+    const attacker = await this.usersService.findByIds([attackerId]).then((u) => u[0]);
+    const attackerName = attacker?.username ?? 'Someone';
+    const tokens = users.filter((u) => u.fcmToken?.trim()).map((u) => u.fcmToken as string);
+    if (tokens.length > 0) {
+      await this.pushService.sendToTokens(
+        tokens,
+        'Territory captured!',
+        `${attackerName} captured your tiles during their run.`,
+        { type: 'tile_captured', attackerId },
+      );
     }
   }
 
