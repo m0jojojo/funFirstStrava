@@ -28,13 +28,17 @@ class _MapScreenState extends State<MapScreen> {
   bool _tilesLayerAdded = false;
   bool _isLoadingTiles = false;
 
+  /// Initial map center. Null = still resolving user location.
+  double? _initialLat;
+  double? _initialLng;
+
   io.Socket? _tilesSocket;
 
   bool _isRunning = false;
   List<PathPoint> _path = [];
   Timer? _runTimer;
 
-  /// Default center: Sector 40 Gurgaon (play area). Position is (lng, lat).
+  /// Fallback center: Sector 40 Gurgaon (when location unavailable). Position is (lng, lat).
   static const double _defaultLng = 77.054319;
   static const double _defaultLat = 28.449841;
   static const double _defaultZoom = 14.0;
@@ -50,46 +54,52 @@ class _MapScreenState extends State<MapScreen> {
   DateTime? _lastTilesRefreshAt;
   static const _tilesRefreshDebounce = Duration(seconds: 2);
 
-  void _onMapCreated(MapboxMap mapboxMap) {
-    _mapboxMap = mapboxMap;
-    _tryCenterOnUserLocation();
+  @override
+  void initState() {
+    super.initState();
+    _resolveInitialCenter();
   }
 
-  void _onStyleLoaded(StyleLoadedEventData eventData) {
-    _loadTilesAndAddLayer();
-    // Also try to center when style is ready (e.g. second time opening map, or slow GPS).
-    _tryCenterOnUserLocation();
-  }
-
-  /// Center map on user location (Phase 5.2). Request permission and flyTo.
-  Future<void> _tryCenterOnUserLocation() async {
-    final mapboxMap = _mapboxMap;
-    if (mapboxMap == null) return;
+  /// Resolve initial map center: user location, or fallback to Sector 40.
+  Future<void> _resolveInitialCenter() async {
     var permission = await geo.Geolocator.checkPermission();
     if (permission == geo.LocationPermission.denied) {
       permission = await geo.Geolocator.requestPermission();
-      if (permission == geo.LocationPermission.denied ||
-          permission == geo.LocationPermission.deniedForever) return;
     }
-    if (!await geo.Geolocator.isLocationServiceEnabled()) return;
+    if (permission == geo.LocationPermission.denied ||
+        permission == geo.LocationPermission.deniedForever ||
+        !await geo.Geolocator.isLocationServiceEnabled()) {
+      if (mounted) setState(() {
+        _initialLat = _defaultLat;
+        _initialLng = _defaultLng;
+      });
+      return;
+    }
     try {
       final pos = await geo.Geolocator.getCurrentPosition(
         locationSettings: geo.LocationSettings(
           accuracy: geo.LocationAccuracy.medium,
-          timeLimit: Duration(seconds: 10),
+          timeLimit: Duration(seconds: 8),
         ),
       );
-      if (!mounted) return;
-      await mapboxMap.flyTo(
-        CameraOptions(
-          center: Point(coordinates: Position(pos.longitude, pos.latitude)),
-          zoom: _defaultZoom,
-          bearing: 0,
-          pitch: 0,
-        ),
-        MapAnimationOptions(duration: 1500, startDelay: 0),
-      );
-    } catch (_) {}
+      if (mounted) setState(() {
+        _initialLat = pos.latitude;
+        _initialLng = pos.longitude;
+      });
+    } catch (_) {
+      if (mounted) setState(() {
+        _initialLat = _defaultLat;
+        _initialLng = _defaultLng;
+      });
+    }
+  }
+
+  void _onMapCreated(MapboxMap mapboxMap) {
+    _mapboxMap = mapboxMap;
+  }
+
+  void _onStyleLoaded(StyleLoadedEventData eventData) {
+    _loadTilesAndAddLayer();
   }
 
   void _onMapIdle(MapIdleEventData eventData) {
@@ -109,8 +119,10 @@ class _MapScreenState extends State<MapScreen> {
 
     setState(() => _tilesError = null);
 
+    final lat = _initialLat ?? _defaultLat;
+    final lng = _initialLng ?? _defaultLng;
     try {
-      final result = await _fetchTilesNear(_defaultLat, _defaultLng);
+      final result = await _fetchTilesNear(lat, lng);
       final list = result.tiles;
       final currentUserId = result.currentUserId;
       final three = (list != null && list.isNotEmpty)
@@ -172,8 +184,8 @@ class _MapScreenState extends State<MapScreen> {
     final mapboxMap = _mapboxMap;
     if (mapboxMap == null || !_tilesLayerAdded) return;
     try {
-      double lat = _defaultLat;
-      double lng = _defaultLng;
+      double lat = _initialLat ?? _defaultLat;
+      double lng = _initialLng ?? _defaultLng;
       try {
         final state = await mapboxMap.getCameraState();
         final pos = state.center?.coordinates;
@@ -394,8 +406,25 @@ class _MapScreenState extends State<MapScreen> {
       );
     }
 
+    // Wait for initial center (user location or fallback)
+    if (_initialLat == null || _initialLng == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Map')),
+        body: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Getting your location...'),
+            ],
+          ),
+        ),
+      );
+    }
+
     final cameraOptions = CameraOptions(
-      center: Point(coordinates: Position(_defaultLng, _defaultLat)),
+      center: Point(coordinates: Position(_initialLng!, _initialLat!)),
       zoom: _defaultZoom,
       bearing: 0,
       pitch: 0,
