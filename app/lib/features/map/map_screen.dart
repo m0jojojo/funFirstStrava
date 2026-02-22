@@ -99,7 +99,21 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _onStyleLoaded(StyleLoadedEventData eventData) {
+    _enableUserLocationPuck();
     _loadTilesAndAddLayer();
+  }
+
+  /// Show user location as blue dot with pulsing glow (like Google Maps).
+  void _enableUserLocationPuck() {
+    try {
+      _mapboxMap?.location.updateSettings(
+        LocationComponentSettings(
+          enabled: true,
+          pulsingEnabled: true,
+          showAccuracyRing: true,
+        ),
+      );
+    } catch (_) {}
   }
 
   void _onMapIdle(MapIdleEventData eventData) {
