@@ -28,6 +28,34 @@ export class TilesService implements OnModuleInit {
     return this.tilesRepository.find({ order: { rowIndex: 'ASC', colIndex: 'ASC' } });
   }
 
+  /** Phase 10.1: tiles near (lat, lng). Returns tiles whose bbox intersects the radius square. */
+  async findNear(
+    lat: number,
+    lng: number,
+    options?: { radiusKm?: number; limit?: number },
+  ): Promise<Tile[]> {
+    const radiusKm = Math.min(50, Math.max(0.1, options?.radiusKm ?? 2));
+    const limit = Math.min(10000, Math.max(1, options?.limit ?? 500));
+    const degPerKmLat = 1 / 111;
+    const degPerKmLng = 1 / (111 * Math.cos((lat * Math.PI) / 180));
+    const deltaLat = radiusKm * degPerKmLat;
+    const deltaLng = radiusKm * degPerKmLng;
+    const minLat = lat - deltaLat;
+    const maxLat = lat + deltaLat;
+    const minLng = lng - deltaLng;
+    const maxLng = lng + deltaLng;
+    return this.tilesRepository
+      .createQueryBuilder('tile')
+      .where('tile.min_lat <= :maxLat', { maxLat })
+      .andWhere('tile.max_lat >= :minLat', { minLat })
+      .andWhere('tile.min_lng <= :maxLng', { maxLng })
+      .andWhere('tile.max_lng >= :minLng', { minLng })
+      .orderBy('tile.row_index', 'ASC')
+      .addOrderBy('tile.col_index', 'ASC')
+      .limit(limit)
+      .getMany();
+  }
+
   /** Phase 6.3: top users by tile count (owned tiles). */
   async getLeaderboard(limit = 20): Promise<LeaderboardEntry[]> {
     const rows = await this.tilesRepository
@@ -87,44 +115,72 @@ export class TilesService implements OnModuleInit {
     const count = await this.tilesRepository.count();
     if (count > 0) return;
 
-    // Bounding box from user coordinates (4 corners). 50×100 = 5,000 tiles.
-    // Points: (28.450665,77.043455), (28.440776,77.055246), (28.449613,77.063986), (28.459290,77.050180)
-    const minLat = 28.440776;
-    const maxLat = 28.45929;
-    const minLng = 77.043455;
-    const maxLng = 77.063986;
-    const rows = 50;
-    const cols = 100;
-    const tileHeight = (maxLat - minLat) / rows;
-    const tileWidth = (maxLng - minLng) / cols;
-
-    const tiles: Tile[] = [];
-
-    for (let row = 0; row < rows; row += 1) {
-      for (let col = 0; col < cols; col += 1) {
-        const tileMinLat = minLat + row * tileHeight;
-        const tileMaxLat = tileMinLat + tileHeight;
-        const tileMinLng = minLng + col * tileWidth;
-        const tileMaxLng = tileMinLng + tileWidth;
-
-        tiles.push(
-          this.tilesRepository.create({
-            rowIndex: row,
-            colIndex: col,
-            minLat: tileMinLat,
-            maxLat: tileMaxLat,
-            minLng: tileMinLng,
-            maxLng: tileMaxLng,
-          }),
-        );
-      }
+    interface Region {
+      minLat: number;
+      maxLat: number;
+      minLng: number;
+      maxLng: number;
+      rows: number;
+      cols: number;
+      rowOffset: number;
+      colOffset: number;
     }
 
-    // PostgreSQL limits parameters per query; save in batches to avoid "bind message has X parameter formats but 0 parameters"
+    const regions: Region[] = [
+      {
+        // Sector 40 Gurgaon: (28.450665,77.043455), (28.440776,77.055246), (28.449613,77.063986), (28.459290,77.050180)
+        minLat: 28.440776,
+        maxLat: 28.45929,
+        minLng: 77.043455,
+        maxLng: 77.063986,
+        rows: 50,
+        cols: 100,
+        rowOffset: 0,
+        colOffset: 0,
+      },
+      {
+        // Rewari: (28.206636,76.605465), (28.220541,76.631225), (28.136325,76.670856), (28.120879,76.631465)
+        minLat: 28.120879,
+        maxLat: 28.220541,
+        minLng: 76.605465,
+        maxLng: 76.670856,
+        rows: 80,
+        cols: 80,
+        rowOffset: 100,
+        colOffset: 0,
+      },
+    ];
+
     const BATCH_SIZE = 1000;
-    for (let i = 0; i < tiles.length; i += BATCH_SIZE) {
-      const batch = tiles.slice(i, i + BATCH_SIZE);
-      await this.tilesRepository.save(batch);
+    for (const r of regions) {
+      const tileHeight = (r.maxLat - r.minLat) / r.rows;
+      const tileWidth = (r.maxLng - r.minLng) / r.cols;
+      const tiles: Tile[] = [];
+
+      for (let row = 0; row < r.rows; row += 1) {
+        for (let col = 0; col < r.cols; col += 1) {
+          const tileMinLat = r.minLat + row * tileHeight;
+          const tileMaxLat = tileMinLat + tileHeight;
+          const tileMinLng = r.minLng + col * tileWidth;
+          const tileMaxLng = tileMinLng + tileWidth;
+
+          tiles.push(
+            this.tilesRepository.create({
+              rowIndex: r.rowOffset + row,
+              colIndex: r.colOffset + col,
+              minLat: tileMinLat,
+              maxLat: tileMaxLat,
+              minLng: tileMinLng,
+              maxLng: tileMaxLng,
+            }),
+          );
+        }
+      }
+
+      for (let i = 0; i < tiles.length; i += BATCH_SIZE) {
+        const batch = tiles.slice(i, i + BATCH_SIZE);
+        await this.tilesRepository.save(batch);
+      }
     }
   }
 }

@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:http/http.dart' as http;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
@@ -34,15 +34,21 @@ class _MapScreenState extends State<MapScreen> {
   List<PathPoint> _path = [];
   Timer? _runTimer;
 
-  /// Default center (same region as backend tile grid): SF area. Position is (lng, lat).
-  static const double _defaultLng = -122.4194;
-  static const double _defaultLat = 37.7749;
+  /// Default center: Sector 40 Gurgaon (play area). Position is (lng, lat).
+  static const double _defaultLng = 77.054319;
+  static const double _defaultLat = 28.449841;
   static const double _defaultZoom = 14.0;
 
-  static const String _tilesSourceIdUnowned = 'tiles-unowned';
-  static const String _tilesSourceIdOwned = 'tiles-owned';
-  static const String _tilesLayerIdUnowned = 'tiles-fill-unowned';
-  static const String _tilesLayerIdOwned = 'tiles-fill-owned';
+  static const String _tilesSourceIdNeutral = 'tiles-neutral';
+  static const String _tilesSourceIdYours = 'tiles-yours';
+  static const String _tilesSourceIdOthers = 'tiles-others';
+  static const String _tilesLayerIdNeutral = 'tiles-fill-neutral';
+  static const String _tilesLayerIdYours = 'tiles-fill-yours';
+  static const String _tilesLayerIdOthers = 'tiles-fill-others';
+  static const String _emptyGeoJson = '{"type":"FeatureCollection","features":[]}';
+
+  DateTime? _lastTilesRefreshAt;
+  static const _tilesRefreshDebounce = Duration(seconds: 2);
 
   void _onMapCreated(MapboxMap mapboxMap) {
     _mapboxMap = mapboxMap;
@@ -87,7 +93,11 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _onMapIdle(MapIdleEventData eventData) {
-    if (_tilesLayerAdded) _refreshTilesData();
+    if (!_tilesLayerAdded) return;
+    final now = DateTime.now();
+    if (_lastTilesRefreshAt != null && now.difference(_lastTilesRefreshAt!) < _tilesRefreshDebounce) return;
+    _lastTilesRefreshAt = now;
+    _refreshTilesData();
   }
 
   Future<void> _loadTilesAndAddLayer() async {
@@ -100,117 +110,182 @@ class _MapScreenState extends State<MapScreen> {
     setState(() => _tilesError = null);
 
     try {
-      final uri = Uri.parse('$apiBaseUrl/tiles');
-      final response = await http.get(uri);
-      if (response.statusCode != 200) {
-        if (mounted) setState(() => _tilesError = 'Tiles: ${response.statusCode}');
-        return;
+      final result = await _fetchTilesNear(_defaultLat, _defaultLng);
+      final list = result.tiles;
+      final currentUserId = result.currentUserId;
+      final three = (list != null && list.isNotEmpty)
+          ? _tilesToGeoJsonThree(list, currentUserId)
+          : (neutral: _emptyGeoJson, yours: _emptyGeoJson, others: _emptyGeoJson);
+
+      if (list == null || list.isEmpty) {
+        if (kDebugMode) debugPrint('[Tiles] Load: no tiles (check API_BASE_URL=$apiBaseUrl and backend)');
+        if (mounted) setState(() => _tilesError = 'No tiles in this area');
+      } else if (kDebugMode) {
+        debugPrint('[Tiles] Load: ${list.length} tiles → neutral/yours/others');
       }
 
-      final list = jsonDecode(response.body) as List<dynamic>;
-      final unowned = _tilesToGeoJson(list, owned: false);
-      final owned = _tilesToGeoJson(list, owned: true);
-      if (unowned == null && owned == null) return;
-
       try {
-        // Remove existing tile layers/sources if present (e.g. style reload or second load).
-        try {
-          await mapboxMap.style.removeStyleLayer(_tilesLayerIdOwned);
-        } catch (_) {}
-        try {
-          await mapboxMap.style.removeStyleLayer(_tilesLayerIdUnowned);
-        } catch (_) {}
-        try {
-          await mapboxMap.style.removeStyleSource(_tilesSourceIdOwned);
-        } catch (_) {}
-        try {
-          await mapboxMap.style.removeStyleSource(_tilesSourceIdUnowned);
-        } catch (_) {}
-
-        await mapboxMap.style.addSource(GeoJsonSource(id: _tilesSourceIdUnowned, data: unowned ?? '{"type":"FeatureCollection","features":[]}'));
-        await mapboxMap.style.addSource(GeoJsonSource(id: _tilesSourceIdOwned, data: owned ?? '{"type":"FeatureCollection","features":[]}'));
+        for (final id in [_tilesLayerIdOthers, _tilesLayerIdYours, _tilesLayerIdNeutral]) {
+          try { await mapboxMap.style.removeStyleLayer(id); } catch (_) {}
+        }
+        for (final id in [_tilesSourceIdOthers, _tilesSourceIdYours, _tilesSourceIdNeutral]) {
+          try { await mapboxMap.style.removeStyleSource(id); } catch (_) {}
+        }
+        await mapboxMap.style.addSource(GeoJsonSource(id: _tilesSourceIdNeutral, data: three.neutral ?? _emptyGeoJson));
+        await mapboxMap.style.addSource(GeoJsonSource(id: _tilesSourceIdYours, data: three.yours ?? _emptyGeoJson));
+        await mapboxMap.style.addSource(GeoJsonSource(id: _tilesSourceIdOthers, data: three.others ?? _emptyGeoJson));
         await mapboxMap.style.addLayer(FillLayer(
-          id: _tilesLayerIdUnowned,
-          sourceId: _tilesSourceIdUnowned,
-          fillColor: Colors.blue.withOpacity(0.35).value,
+          id: _tilesLayerIdNeutral,
+          sourceId: _tilesSourceIdNeutral,
+          fillColor: Colors.grey.withOpacity(0.35).value,
           fillOpacity: 0.5,
+          fillOutlineColor: Colors.grey.value,
+        ));
+        await mapboxMap.style.addLayer(FillLayer(
+          id: _tilesLayerIdYours,
+          sourceId: _tilesSourceIdYours,
+          fillColor: Colors.blue.withOpacity(0.4).value,
+          fillOpacity: 0.6,
           fillOutlineColor: Colors.blue.value,
         ));
         await mapboxMap.style.addLayer(FillLayer(
-          id: _tilesLayerIdOwned,
-          sourceId: _tilesSourceIdOwned,
-          fillColor: Colors.green.withOpacity(0.4).value,
+          id: _tilesLayerIdOthers,
+          sourceId: _tilesSourceIdOthers,
+          fillColor: Colors.red.withOpacity(0.4).value,
           fillOpacity: 0.6,
-          fillOutlineColor: Colors.green.value,
+          fillOutlineColor: Colors.red.value,
         ));
         if (mounted) setState(() => _tilesLayerAdded = true);
       } catch (e) {
         if (mounted) setState(() => _tilesError = 'Layer: $e');
       }
     } catch (e) {
+      if (kDebugMode) debugPrint('[Tiles] Fetch failed: $e');
       if (mounted) setState(() => _tilesError = 'Fetch: $e');
     } finally {
       _isLoadingTiles = false;
     }
   }
 
-  /// Refresh tile source data when map moves (Phase 5.3) and after run save (Phase 6.2).
+  /// Refresh tile source data when map moves and after run save.
   Future<void> _refreshTilesData() async {
     final mapboxMap = _mapboxMap;
     if (mapboxMap == null || !_tilesLayerAdded) return;
     try {
-      final list = await _fetchTiles();
-      if (list == null || !mounted) return;
-      final unowned = _tilesToGeoJson(list, owned: false);
-      final owned = _tilesToGeoJson(list, owned: true);
-      final unownedSource = await mapboxMap.style.getSource(_tilesSourceIdUnowned);
-      final ownedSource = await mapboxMap.style.getSource(_tilesSourceIdOwned);
-      if (unownedSource is GeoJsonSource) await unownedSource.updateGeoJSON(unowned ?? '{"type":"FeatureCollection","features":[]}');
-      if (ownedSource is GeoJsonSource) await ownedSource.updateGeoJSON(owned ?? '{"type":"FeatureCollection","features":[]}');
+      double lat = _defaultLat;
+      double lng = _defaultLng;
+      try {
+        final state = await mapboxMap.getCameraState();
+        final pos = state.center?.coordinates;
+        if (pos != null) {
+          lat = (pos.lat as num).toDouble();
+          lng = (pos.lng as num).toDouble();
+        }
+      } catch (_) {}
+      final result = await _fetchTilesNear(lat, lng);
+      if (result.tiles == null || !mounted) return;
+      // Don't overwrite with empty when camera moved outside play area (e.g. flyTo to user location).
+      if (result.tiles!.isEmpty) return;
+      final three = _tilesToGeoJsonThree(result.tiles!, result.currentUserId);
+      final neutralSrc = await mapboxMap.style.getSource(_tilesSourceIdNeutral);
+      final yoursSrc = await mapboxMap.style.getSource(_tilesSourceIdYours);
+      final othersSrc = await mapboxMap.style.getSource(_tilesSourceIdOthers);
+      if (neutralSrc is GeoJsonSource) await neutralSrc.updateGeoJSON(three.neutral ?? _emptyGeoJson);
+      if (yoursSrc is GeoJsonSource) await yoursSrc.updateGeoJSON(three.yours ?? _emptyGeoJson);
+      if (othersSrc is GeoJsonSource) await othersSrc.updateGeoJSON(three.others ?? _emptyGeoJson);
+      if (mounted) setState(() => _tilesError = null);
     } catch (_) {}
   }
 
-  Future<List<dynamic>?> _fetchTiles() async {
-    final uri = Uri.parse('$apiBaseUrl/tiles');
-    final response = await http.get(uri);
-    if (response.statusCode != 200) return null;
-    final decoded = jsonDecode(response.body);
-    return decoded is List<dynamic> ? decoded : null;
+  Future<({List<dynamic>? tiles, String? currentUserId})> _fetchTilesNear(double lat, double lng) async {
+    final headers = <String, String>{};
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final token = await user.getIdToken();
+      if (token != null) headers['Authorization'] = 'Bearer $token';
+    }
+    final nearUri = Uri.parse('$apiBaseUrl/tiles/near').replace(queryParameters: {
+      'lat': lat.toString(),
+      'lng': lng.toString(),
+      'radiusKm': '10',
+      'limit': '6000',
+    });
+    final nearResponse = await http.get(nearUri, headers: headers.isEmpty ? null : headers);
+    final nearOk = nearResponse.statusCode == 200;
+    if (kDebugMode) {
+      debugPrint('[Tiles] GET /tiles/near lat=$lat lng=$lng → ${nearResponse.statusCode} (${nearResponse.body.length} bytes)');
+    }
+    if (nearOk) {
+      final decoded = jsonDecode(nearResponse.body);
+      if (decoded is Map<String, dynamic>) {
+        final tiles = decoded['tiles'];
+        final currentUserId = decoded['currentUserId']?.toString();
+        if (tiles is List<dynamic>) {
+          if (kDebugMode) debugPrint('[Tiles] /tiles/near → ${tiles.length} tiles, currentUserId=$currentUserId');
+          return (
+            tiles: tiles,
+            currentUserId: currentUserId != null && currentUserId.isNotEmpty ? currentUserId : null,
+          );
+        }
+      }
+    }
+    if (kDebugMode) debugPrint('[Tiles] Fallback to GET /tiles/all');
+    final allUri = Uri.parse('$apiBaseUrl/tiles/all');
+    final allResponse = await http.get(allUri, headers: headers.isEmpty ? null : headers);
+    if (kDebugMode) debugPrint('[Tiles] GET /tiles/all → ${allResponse.statusCode}');
+    if (allResponse.statusCode != 200) return (tiles: null, currentUserId: null);
+    final body = jsonDecode(allResponse.body);
+    List<dynamic>? list;
+    String? currentUserId;
+    if (body is Map<String, dynamic>) {
+      list = body['tiles'] is List ? body['tiles'] as List<dynamic> : null;
+      final cu = body['currentUserId']?.toString();
+      if (cu != null && cu.isNotEmpty) currentUserId = cu;
+    }
+    if (list == null) return (tiles: null, currentUserId: null);
+    if (kDebugMode) debugPrint('[Tiles] Got ${list.length} tiles (fallback), currentUserId=$currentUserId');
+    return (tiles: list, currentUserId: currentUserId);
   }
 
-  /// Build GeoJSON FeatureCollection from backend tile list (Phase 6.2: split by owner).
-  /// Backend returns [{ id, minLat, minLng, maxLat, maxLng, ownerId?, ... }, ...].
-  String? _tilesToGeoJson(List<dynamic> list, {required bool owned}) {
-    final features = <Map<String, dynamic>>[];
+  ({String? neutral, String? yours, String? others}) _tilesToGeoJsonThree(List<dynamic> list, String? currentUserId) {
+    final neutralFeatures = <Map<String, dynamic>>[];
+    final yoursFeatures = <Map<String, dynamic>>[];
+    final othersFeatures = <Map<String, dynamic>>[];
     for (final t in list) {
       final tile = t as Map<String, dynamic>;
-      final ownerId = tile['ownerId'] ?? tile['owner_id'];
-      final hasOwner = ownerId != null && ownerId.toString().isNotEmpty;
-      if (owned != hasOwner) continue;
+      final ownerIdRaw = tile['ownerId'] ?? tile['owner_id'];
+      final ownerId = ownerIdRaw != null && ownerIdRaw.toString().isNotEmpty ? ownerIdRaw.toString() : null;
       final minLat = _num(tile['minLat'] ?? tile['min_lat']);
       final minLng = _num(tile['minLng'] ?? tile['min_lng']);
       final maxLat = _num(tile['maxLat'] ?? tile['max_lat']);
       final maxLng = _num(tile['maxLng'] ?? tile['max_lng']);
       if (minLat == null || minLng == null || maxLat == null || maxLng == null) continue;
-      features.add({
-        'type': 'Feature',
-        'properties': {'id': tile['id']},
-        'geometry': {
-          'type': 'Polygon',
-          'coordinates': [
-            [
-              [minLng, minLat],
-              [maxLng, minLat],
-              [maxLng, maxLat],
-              [minLng, maxLat],
-              [minLng, minLat],
-            ],
+      final geom = {
+        'type': 'Polygon',
+        'coordinates': [
+          [
+            [minLng, minLat],
+            [maxLng, minLat],
+            [maxLng, maxLat],
+            [minLng, maxLat],
+            [minLng, minLat],
           ],
-        },
-      });
+        ],
+      };
+      final feature = {'type': 'Feature', 'properties': {'id': tile['id']}, 'geometry': geom};
+      if (ownerId == null) {
+        neutralFeatures.add(feature);
+      } else if (currentUserId != null && ownerId == currentUserId) {
+        yoursFeatures.add(feature);
+      } else {
+        othersFeatures.add(feature);
+      }
     }
-    if (features.isEmpty) return null;
-    return jsonEncode({'type': 'FeatureCollection', 'features': features});
+    return (
+      neutral: neutralFeatures.isEmpty ? null : jsonEncode({'type': 'FeatureCollection', 'features': neutralFeatures}),
+      yours: yoursFeatures.isEmpty ? null : jsonEncode({'type': 'FeatureCollection', 'features': yoursFeatures}),
+      others: othersFeatures.isEmpty ? null : jsonEncode({'type': 'FeatureCollection', 'features': othersFeatures}),
+    );
   }
 
   double? _num(dynamic v) {
