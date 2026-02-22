@@ -86,7 +86,7 @@ class PushNotificationService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final idToken = await user.getIdToken();
+    final idToken = await user.getIdToken(true);
     if (idToken == null) return;
 
     try {
@@ -100,7 +100,9 @@ class PushNotificationService {
         body: jsonEncode({'fcmToken': fcmToken}),
       );
       if (kDebugMode) {
-        debugPrint('[FCM] Backend register: ${response.statusCode}');
+        if (response.statusCode != 204) {
+          debugPrint('[FCM] Backend register: ${response.statusCode} ${response.body}');
+        }
       }
     } catch (e) {
       if (kDebugMode) debugPrint('[FCM] Backend register failed: $e');
