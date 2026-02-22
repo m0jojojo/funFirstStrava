@@ -11,6 +11,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final authService = AuthService();
     return Scaffold(
+      backgroundColor: const Color(0xFFFFDA03),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -49,6 +50,11 @@ class HomeScreen extends StatelessWidget {
       // Auth state changes → StreamBuilder in main.dart shows LoginScreen
     },
     child: const Text('Sign out'),
+  ),
+  const SizedBox(height: 48),
+  const Text(
+    'I LOVE YOU GOGO ❤️',
+    style: TextStyle(fontSize: 18),
   ),
 ],
         ),
