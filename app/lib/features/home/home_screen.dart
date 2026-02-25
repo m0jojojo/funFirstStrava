@@ -5,6 +5,7 @@ import '../../services/offline_run_service.dart';
 import '../../services/push_notification_service.dart';
 import '../leaderboard/leaderboard_screen.dart';
 import '../map/map_screen.dart';
+import '../runs/runs_list_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -57,6 +58,17 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     },
     child: const Text('Leaderboard'),
+  ),
+  const SizedBox(height: 12),
+  FilledButton.tonal(
+    onPressed: () {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const RunsListScreen(),
+        ),
+      );
+    },
+    child: const Text('My runs'),
   ),
   const SizedBox(height: 24),
   TextButton(

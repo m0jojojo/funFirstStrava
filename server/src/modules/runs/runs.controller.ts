@@ -33,6 +33,7 @@ export class RunsController {
       startedAt: r.startedAt,
       endedAt: r.endedAt,
       pathLength: r.path.length,
+      distanceMeters: this.runsService.computePathDistanceM(r.path),
     }));
   }
 }

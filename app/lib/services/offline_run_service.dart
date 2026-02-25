@@ -41,6 +41,46 @@ class OfflineRunService {
     }
   }
 
+  /// Returns runs saved locally that are not yet uploaded (for display in My runs).
+  Future<List<RunSummary>> getPendingRuns() async {
+    final raw = await _loadRawRuns();
+    final list = <RunSummary>[];
+    for (final run in raw) {
+      final path = run['path'];
+      if (path is! List<dynamic> || path.isEmpty) continue;
+      final pathPoints = <PathPoint>[];
+      int? startT;
+      int? endT;
+      for (final p in path) {
+        if (p is Map<String, dynamic>) {
+          final lat = p['lat'];
+          final lng = p['lng'];
+          final t = p['t'];
+          if (lat is num && lng is num && t is num) {
+            pathPoints.add(PathPoint(
+              lat: lat.toDouble(),
+              lng: lng.toDouble(),
+              t: t.toInt(),
+            ));
+            if (startT == null || t.toInt() < startT) startT = t.toInt();
+            if (endT == null || t.toInt() > endT) endT = t.toInt();
+          }
+        }
+      }
+      if (startT != null && endT != null && pathPoints.isNotEmpty) {
+        final distanceMeters = pathDistanceMeters(pathPoints);
+        list.add(RunSummary(
+          id: '',
+          startedAt: DateTime.fromMillisecondsSinceEpoch(startT),
+          endedAt: DateTime.fromMillisecondsSinceEpoch(endT),
+          pathLength: pathPoints.length,
+          distanceMeters: distanceMeters,
+        ));
+      }
+    }
+    return list;
+  }
+
   /// Attempts to upload all pending offline runs.
   /// Returns the number of runs successfully synced.
   Future<int> syncPendingRuns() async {

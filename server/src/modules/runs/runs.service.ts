@@ -59,6 +59,21 @@ export class RunsService {
       take: 50,
     });
   }
+
+  /** Total path distance in meters (Haversine sum over consecutive points). */
+  computePathDistanceM(path: PathPoint[]): number {
+    if (path.length < 2) return 0;
+    let total = 0;
+    for (let i = 1; i < path.length; i++) {
+      total += haversineM(
+        path[i - 1].lat,
+        path[i - 1].lng,
+        path[i].lat,
+        path[i].lng,
+      );
+    }
+    return total;
+  }
 }
 
 /** Distance between two points in meters (Haversine). */
