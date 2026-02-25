@@ -77,13 +77,13 @@ class _HomeScreenState extends State<HomeScreen> {
       // Auth state changes → StreamBuilder in main.dart shows LoginScreen
     },
     child: const Text('Sign out'),
-  ),
-  const SizedBox(height: 48),
-  const Text(
-    'I LOVE YOU GOGO ❤️',
-    style: TextStyle(fontSize: 18),
-  ),
-],
+      ),
+      const SizedBox(height: 48),
+      const Text(
+        'gogo ❤️',
+        style: TextStyle(fontSize: 18),
+      ),
+    ],
         ),
       ),
     );
