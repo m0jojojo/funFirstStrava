@@ -16,6 +16,7 @@ dependencies:
   google_sign_in: ^6.2.2
   geolocator: ^13.0.2
   http: ^1.2.2
+  shared_preferences: ^2.5.4
   # Map (Phase 5.2). Android/iOS only; token via --dart-define ACCESS_TOKEN=...
   mapbox_maps_flutter: ^2.18.0
   # Phase 6.4: real-time tile updates

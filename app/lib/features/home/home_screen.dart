@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/offline_run_service.dart';
 import '../../services/push_notification_service.dart';
 import '../leaderboard/leaderboard_screen.dart';
 import '../map/map_screen.dart';
@@ -17,6 +18,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     PushNotificationService().sendTokenToBackend();
+    // Try to upload any runs that were recorded offline while the user was disconnected.
+    OfflineRunService().syncPendingRuns();
   }
 
   @override

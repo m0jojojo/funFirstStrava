@@ -10,6 +10,7 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
 import '../../core/api_config.dart';
+import '../../services/offline_run_service.dart';
 import '../../services/run_service.dart';
 
 /// Full-screen map (Mapbox). Android/iOS only; requires ACCESS_TOKEN via --dart-define.
@@ -369,16 +370,33 @@ class _MapScreenState extends State<MapScreen> {
     }
     final pathToSubmit = List<PathPoint>.from(_path);
     _path = [];
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('Not signed in');
       final idToken = await user.getIdToken();
       if (idToken == null) throw Exception('No token');
       await submitRun(idToken, pathToSubmit);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Run saved (${pathToSubmit.length} points)')));
+      await OfflineRunService().syncPendingRuns();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Run saved (${pathToSubmit.length} points)')),
+        );
+      }
       _refreshTilesData();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $e')));
+      final msg = e.toString();
+      if (msg.contains('Failed to save run: 400')) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $e')));
+        }
+        return;
+      }
+      await OfflineRunService().saveRunLocally(pathToSubmit);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No network? Run saved offline and will sync when you are online.')),
+        );
+      }
     }
   }
 
