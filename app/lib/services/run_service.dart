@@ -100,6 +100,9 @@ double _haversineM(double lat1, double lng1, double lat2, double lng2) {
   final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
   return r * c;
 }
+
+/// Fetches the current user's runs from GET /runs/me. Requires [idToken] for auth.
+Future<List<RunSummary>> fetchMyRuns(String idToken) async {
   final uri = Uri.parse('$apiBaseUrl/runs/me');
   final response = await http.get(
     uri,
