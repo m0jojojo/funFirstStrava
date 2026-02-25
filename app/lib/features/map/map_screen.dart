@@ -462,39 +462,52 @@ class _MapScreenState extends State<MapScreen> {
       pitch: 0,
     );
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          MapWidget(
-            key: const ValueKey('mapWidget'),
-            cameraOptions: cameraOptions,
-            onMapCreated: _onMapCreated,
-            onStyleLoadedListener: _onStyleLoaded,
-            onMapIdleListener: _onMapIdle,
-          ),
-          if (_tilesError != null)
-            Positioned(
-              left: 16,
-              right: 16,
-              top: MediaQuery.of(context).padding.top + 8,
-              child: Material(
-                color: Colors.white70,
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(_tilesError!, style: const TextStyle(color: Colors.black87, fontSize: 12)),
+    return WillPopScope(
+      onWillPop: () async {
+        if (_isRunning) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Stop run before leaving the map')),
+            );
+          }
+          return false;
+        }
+        return true;
+      },
+      child: Scaffold(
+        body: Stack(
+          children: [
+            MapWidget(
+              key: const ValueKey('mapWidget'),
+              cameraOptions: cameraOptions,
+              onMapCreated: _onMapCreated,
+              onStyleLoadedListener: _onStyleLoaded,
+              onMapIdleListener: _onMapIdle,
+            ),
+            if (_tilesError != null)
+              Positioned(
+                left: 16,
+                right: 16,
+                top: MediaQuery.of(context).padding.top + 8,
+                child: Material(
+                  color: Colors.white70,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(_tilesError!, style: const TextStyle(color: Colors.black87, fontSize: 12)),
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _isRunning ? _stopRun : _startRun,
+          backgroundColor: _isRunning ? Colors.red : Colors.green,
+          icon: Icon(_isRunning ? Icons.stop : Icons.directions_run),
+          label: Text(_isRunning ? 'Stop run · ${_path.length} pts' : 'Start run'),
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _isRunning ? _stopRun : _startRun,
-        backgroundColor: _isRunning ? Colors.red : Colors.green,
-        icon: Icon(_isRunning ? Icons.stop : Icons.directions_run),
-        label: Text(_isRunning ? 'Stop run · ${_path.length} pts' : 'Start run'),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 }
