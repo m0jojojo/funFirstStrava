@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:geolocator/geolocator.dart' as geo;
@@ -10,8 +9,8 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
 import '../../core/api_config.dart';
-import '../../services/offline_run_service.dart';
 import '../../services/run_service.dart';
+import '../../services/run_tracker.dart';
 
 /// Full-screen map (Mapbox). Android/iOS only; requires ACCESS_TOKEN via --dart-define.
 /// Fetches tiles from backend and draws them as a fill layer (Phase 5.3).
@@ -34,10 +33,6 @@ class _MapScreenState extends State<MapScreen> {
   double? _initialLng;
 
   io.Socket? _tilesSocket;
-
-  bool _isRunning = false;
-  List<PathPoint> _path = [];
-  Timer? _runTimer;
 
   /// Fallback center: Sector 40 Gurgaon (when location unavailable). Position is (lng, lat).
   static const double _defaultLng = 77.054319;
@@ -323,86 +318,26 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _startRun() async {
-    if (_isRunning) return;
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sign in to record runs')));
-      return;
+    final error = await RunTracker.instance.start();
+    if (!mounted) return;
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
     }
-    final permission = await geo.Geolocator.checkPermission();
-    if (permission == geo.LocationPermission.denied) {
-      final requested = await geo.Geolocator.requestPermission();
-      if (requested == geo.LocationPermission.denied || requested == geo.LocationPermission.deniedForever) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location permission needed')));
-        return;
-      }
-    }
-    if (!await geo.Geolocator.isLocationServiceEnabled()) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enable location services')));
-      return;
-    }
-    setState(() {
-      _isRunning = true;
-      _path = [];
-    });
-    try {
-      final pos = await geo.Geolocator.getCurrentPosition();
-      if (mounted && _isRunning) setState(() => _path.add(PathPoint(lat: pos.latitude, lng: pos.longitude, t: DateTime.now().millisecondsSinceEpoch)));
-    } catch (_) {}
-    _runTimer = Timer.periodic(const Duration(seconds: 4), (_) async {
-      try {
-        final pos = await geo.Geolocator.getCurrentPosition();
-        if (mounted && _isRunning) {
-          setState(() => _path.add(PathPoint(lat: pos.latitude, lng: pos.longitude, t: DateTime.now().millisecondsSinceEpoch)));
-        }
-      } catch (_) {}
-    });
   }
 
   Future<void> _stopRun() async {
-    if (!_isRunning) return;
-    _runTimer?.cancel();
-    _runTimer = null;
-    setState(() => _isRunning = false);
-    if (_path.isEmpty) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No points recorded')));
-      return;
+    final result = await RunTracker.instance.stop();
+    if (!mounted) return;
+    if (result.message != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message!)));
     }
-    final pathToSubmit = List<PathPoint>.from(_path);
-    _path = [];
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw Exception('Not signed in');
-      final idToken = await user.getIdToken();
-      if (idToken == null) throw Exception('No token');
-      await submitRun(idToken, pathToSubmit);
-      await OfflineRunService().syncPendingRuns();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Run saved (${pathToSubmit.length} points)')),
-        );
-      }
+    if (result.success) {
       _refreshTilesData();
-    } catch (e) {
-      final msg = e.toString();
-      if (msg.contains('Failed to save run: 400')) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $e')));
-        }
-        return;
-      }
-      await OfflineRunService().saveRunLocally(pathToSubmit);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No network? Run saved offline and will sync when you are online.')),
-        );
-      }
     }
   }
 
   @override
   void dispose() {
-    _runTimer?.cancel();
     _tilesSocket?.disconnect();
     _tilesSocket?.dispose();
     super.dispose();
@@ -462,15 +397,18 @@ class _MapScreenState extends State<MapScreen> {
       pitch: 0,
     );
 
+    final tracker = RunTracker.instance;
+
     return WillPopScope(
       onWillPop: () async {
-        if (_isRunning) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Stop run before leaving the map')),
-            );
-          }
-          return false;
+        if (tracker.isRunning && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Run is still active. You can come back to the map later and press Stop run.',
+              ),
+            ),
+          );
         }
         return true;
       },
@@ -500,11 +438,17 @@ class _MapScreenState extends State<MapScreen> {
               ),
           ],
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _isRunning ? _stopRun : _startRun,
-          backgroundColor: _isRunning ? Colors.red : Colors.green,
-          icon: Icon(_isRunning ? Icons.stop : Icons.directions_run),
-          label: Text(_isRunning ? 'Stop run · ${_path.length} pts' : 'Start run'),
+        floatingActionButton: AnimatedBuilder(
+          animation: RunTracker.instance,
+          builder: (context, _) {
+            final tracker = RunTracker.instance;
+            return FloatingActionButton.extended(
+              onPressed: tracker.isRunning ? _stopRun : _startRun,
+              backgroundColor: tracker.isRunning ? Colors.red : Colors.green,
+              icon: Icon(tracker.isRunning ? Icons.stop : Icons.directions_run),
+              label: Text(tracker.isRunning ? 'Stop run · ${tracker.path.length} pts' : 'Start run'),
+            );
+          },
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       ),
