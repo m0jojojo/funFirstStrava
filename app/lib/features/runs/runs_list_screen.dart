@@ -92,7 +92,8 @@ class _RunsListScreenState extends State<RunsListScreen> {
   }
 
   static String _formatDistance(double? meters) {
-    if (meters == null || meters <= 0) return '—';
+    if (meters == null) return '—';
+    if (meters <= 0) return '0 m';
     if (meters < 1000) return '${meters.round()} m';
     return '${(meters / 1000).toStringAsFixed(1)} km';
   }
