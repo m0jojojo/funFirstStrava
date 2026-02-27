@@ -8,8 +8,9 @@ import { UsersService } from '../users/users.service';
 
 const ORIGIN_LAT = -90;
 const ORIGIN_LNG = -180;
-const TILE_DEG_LAT = 0.01; // ~1.1 km
-const TILE_DEG_LNG = 0.01; // ~1.1 km at equator
+// ~20 m × 20 m (1° lat ≈ 111 km; same deg for lng gives ~20 m E–W at low latitudes)
+const TILE_DEG_LAT = 20 / 111_000;
+const TILE_DEG_LNG = 20 / 111_000;
 
 export interface LeaderboardEntry {
   userId: string;
