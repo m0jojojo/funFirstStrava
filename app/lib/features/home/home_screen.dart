@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/offline_run_service.dart';
 import '../../services/push_notification_service.dart';
 import '../leaderboard/leaderboard_screen.dart';
 import '../map/map_screen.dart';
+import '../runs/runs_list_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,6 +19,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     PushNotificationService().sendTokenToBackend();
+    // Try to upload any runs that were recorded offline while the user was disconnected.
+    OfflineRunService().syncPendingRuns();
   }
 
   @override
@@ -55,6 +59,17 @@ class _HomeScreenState extends State<HomeScreen> {
     },
     child: const Text('Leaderboard'),
   ),
+  const SizedBox(height: 12),
+  FilledButton.tonal(
+    onPressed: () {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const RunsListScreen(),
+        ),
+      );
+    },
+    child: const Text('My runs'),
+  ),
   const SizedBox(height: 24),
   TextButton(
     onPressed: () async {
@@ -62,13 +77,13 @@ class _HomeScreenState extends State<HomeScreen> {
       // Auth state changes → StreamBuilder in main.dart shows LoginScreen
     },
     child: const Text('Sign out'),
-  ),
-  const SizedBox(height: 48),
-  const Text(
-    'I LOVE YOU GOGO ❤️',
-    style: TextStyle(fontSize: 18),
-  ),
-],
+      ),
+      const SizedBox(height: 48),
+      const Text(
+        'gogo ❤️',
+        style: TextStyle(fontSize: 18),
+      ),
+    ],
         ),
       ),
     );

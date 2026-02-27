@@ -8,6 +8,8 @@ import { User } from '../users/user.entity';
 
 /** Max allowed speed between consecutive path points (m/s). ~54 km/h; rejects driving/teleport. */
 const MAX_SPEED_MS = 15;
+/** Segments with time gap above this (ms) are not speed-checked. Handles background GPS throttling / long pauses. */
+const GAP_SKIP_MS = 60_000; // 1 minute
 
 @Injectable()
 export class RunsService {
@@ -17,13 +19,14 @@ export class RunsService {
     private readonly tilesService: TilesService,
   ) {}
 
-  /** Phase 6.4 anti-cheat: reject path if any segment exceeds max speed. */
+  /** Phase 6.4 anti-cheat: reject path if any segment exceeds max speed. Skips segments with large time gaps (background GPS). */
   private validatePath(path: PathPoint[]): void {
     for (let i = 1; i < path.length; i++) {
       const a = path[i - 1];
       const b = path[i];
       const dtMs = Math.abs((b.t ?? 0) - (a.t ?? 0));
       if (dtMs <= 0) continue;
+      if (dtMs > GAP_SKIP_MS) continue; // long gap = pause or background GPS; don't treat as teleport
       const distM = haversineM(a.lat, a.lng, b.lat, b.lng);
       const speedMs = distM / (dtMs / 1000);
       if (speedMs > MAX_SPEED_MS) {
@@ -58,6 +61,21 @@ export class RunsService {
       order: { createdAt: 'DESC' },
       take: 50,
     });
+  }
+
+  /** Total path distance in meters (Haversine sum over consecutive points). */
+  computePathDistanceM(path: PathPoint[]): number {
+    if (path.length < 2) return 0;
+    let total = 0;
+    for (let i = 1; i < path.length; i++) {
+      total += haversineM(
+        path[i - 1].lat,
+        path[i - 1].lng,
+        path[i].lat,
+        path[i].lng,
+      );
+    }
+    return total;
   }
 }
 
