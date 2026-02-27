@@ -6,6 +6,11 @@ import { TilesGateway } from './tiles.gateway';
 import { PushNotificationService } from '../notifications/push-notification.service';
 import { UsersService } from '../users/users.service';
 
+const ORIGIN_LAT = -90;
+const ORIGIN_LNG = -180;
+const TILE_DEG_LAT = 0.01; // ~1.1 km
+const TILE_DEG_LNG = 0.01; // ~1.1 km at equator
+
 export interface LeaderboardEntry {
   userId: string;
   username: string;
@@ -46,12 +51,16 @@ export class TilesService implements OnModuleInit {
     const maxLat = lat + deltaLat;
     const minLng = lng - deltaLng;
     const maxLng = lng + deltaLng;
+
+    const minRow = Math.floor((minLat - ORIGIN_LAT) / TILE_DEG_LAT);
+    const maxRow = Math.floor((maxLat - ORIGIN_LAT) / TILE_DEG_LAT);
+    const minCol = Math.floor((minLng - ORIGIN_LNG) / TILE_DEG_LNG);
+    const maxCol = Math.floor((maxLng - ORIGIN_LNG) / TILE_DEG_LNG);
+
     return this.tilesRepository
       .createQueryBuilder('tile')
-      .where('tile.min_lat <= :maxLat', { maxLat })
-      .andWhere('tile.max_lat >= :minLat', { minLat })
-      .andWhere('tile.min_lng <= :maxLng', { maxLng })
-      .andWhere('tile.max_lng >= :minLng', { minLng })
+      .where('tile.row_index BETWEEN :minRow AND :maxRow', { minRow, maxRow })
+      .andWhere('tile.col_index BETWEEN :minCol AND :maxCol', { minCol, maxCol })
       .orderBy('tile.row_index', 'ASC')
       .addOrderBy('tile.col_index', 'ASC')
       .limit(limit)
@@ -91,35 +100,48 @@ export class TilesService implements OnModuleInit {
     path: Array<{ lat: number; lng: number }>,
   ): Promise<void> {
     if (path.length === 0) return;
-    const allTiles = await this.tilesRepository.find();
-    const tileIdsToCapture = new Set<string>();
+    const visitedKeys = new Set<string>();
+    const tilesToSave: Tile[] = [];
     const previousOwnerByTile = new Map<string, string>();
-    for (const point of path) {
-      for (const tile of allTiles) {
-        if (
-          point.lat >= tile.minLat &&
-          point.lat <= tile.maxLat &&
-          point.lng >= tile.minLng &&
-          point.lng <= tile.maxLng
-        ) {
-          tileIdsToCapture.add(tile.id);
-          if (tile.ownerId && tile.ownerId !== userId) {
-            previousOwnerByTile.set(tile.id, tile.ownerId);
-          }
-        }
-      }
-    }
-    if (tileIdsToCapture.size > 0) {
-      await this.tilesRepository.update(
-        { id: In([...tileIdsToCapture]) },
-        { ownerId: userId },
-      );
-      this.tilesGateway.broadcastTilesUpdated(userId, tileIdsToCapture.size);
 
-      const previousOwnerIds = [...new Set(previousOwnerByTile.values())];
-      if (previousOwnerIds.length > 0) {
-        await this.notifyPreviousOwners(previousOwnerIds, userId);
+    for (const point of path) {
+      if (typeof point.lat !== 'number' || typeof point.lng !== 'number') continue;
+      const { rowIndex, colIndex } = this.pointToIndices(point.lat, point.lng);
+      const key = `${rowIndex}:${colIndex}`;
+      if (visitedKeys.has(key)) continue;
+      visitedKeys.add(key);
+
+      let tile = await this.tilesRepository.findOne({
+        where: { rowIndex, colIndex },
+      });
+
+      if (!tile) {
+        const bounds = this.indicesToBounds(rowIndex, colIndex);
+        tile = this.tilesRepository.create({
+          rowIndex,
+          colIndex,
+          ...bounds,
+        });
       }
+
+      if (tile.ownerId && tile.ownerId !== userId) {
+        previousOwnerByTile.set(tile.id, tile.ownerId);
+      }
+
+      tile.ownerId = userId;
+      tilesToSave.push(tile);
+    }
+
+    if (tilesToSave.length === 0) return;
+
+    const saved = await this.tilesRepository.save(tilesToSave);
+    const uniqueIds = new Set(saved.map((t) => t.id));
+
+    this.tilesGateway.broadcastTilesUpdated(userId, uniqueIds.size);
+
+    const previousOwnerIds = [...new Set(previousOwnerByTile.values())];
+    if (previousOwnerIds.length > 0) {
+      await this.notifyPreviousOwners(previousOwnerIds, userId);
     }
   }
 
@@ -139,76 +161,28 @@ export class TilesService implements OnModuleInit {
   }
 
   private async seedIfEmpty(): Promise<void> {
+    // Global grid is now generated lazily from GPS paths; no upfront seeding required.
     const count = await this.tilesRepository.count();
     if (count > 0) return;
+  }
 
-    interface Region {
-      minLat: number;
-      maxLat: number;
-      minLng: number;
-      maxLng: number;
-      rows: number;
-      cols: number;
-      rowOffset: number;
-      colOffset: number;
-    }
+  private pointToIndices(lat: number, lng: number): { rowIndex: number; colIndex: number } {
+    const rowIndex = Math.floor((lat - ORIGIN_LAT) / TILE_DEG_LAT);
+    const colIndex = Math.floor((lng - ORIGIN_LNG) / TILE_DEG_LNG);
+    return { rowIndex, colIndex };
+  }
 
-    const regions: Region[] = [
-      {
-        // Sector 40 Gurgaon: (28.450665,77.043455), (28.440776,77.055246), (28.449613,77.063986), (28.459290,77.050180)
-        minLat: 28.440776,
-        maxLat: 28.45929,
-        minLng: 77.043455,
-        maxLng: 77.063986,
-        rows: 50,
-        cols: 100,
-        rowOffset: 0,
-        colOffset: 0,
-      },
-      {
-        // Rewari: (28.196031,76.739296), (28.120541,76.632614), (28.192237,76.610443), (28.225281,76.680314)
-        minLat: 28.120541,
-        maxLat: 28.225281,
-        minLng: 76.610443,
-        maxLng: 76.739296,
-        rows: 80,
-        cols: 80,
-        rowOffset: 100,
-        colOffset: 0,
-      },
-    ];
-
-    const BATCH_SIZE = 1000;
-    for (const r of regions) {
-      const tileHeight = (r.maxLat - r.minLat) / r.rows;
-      const tileWidth = (r.maxLng - r.minLng) / r.cols;
-      const tiles: Tile[] = [];
-
-      for (let row = 0; row < r.rows; row += 1) {
-        for (let col = 0; col < r.cols; col += 1) {
-          const tileMinLat = r.minLat + row * tileHeight;
-          const tileMaxLat = tileMinLat + tileHeight;
-          const tileMinLng = r.minLng + col * tileWidth;
-          const tileMaxLng = tileMinLng + tileWidth;
-
-          tiles.push(
-            this.tilesRepository.create({
-              rowIndex: r.rowOffset + row,
-              colIndex: r.colOffset + col,
-              minLat: tileMinLat,
-              maxLat: tileMaxLat,
-              minLng: tileMinLng,
-              maxLng: tileMaxLng,
-            }),
-          );
-        }
-      }
-
-      for (let i = 0; i < tiles.length; i += BATCH_SIZE) {
-        const batch = tiles.slice(i, i + BATCH_SIZE);
-        await this.tilesRepository.save(batch);
-      }
-    }
+  private indicesToBounds(rowIndex: number, colIndex: number): {
+    minLat: number;
+    maxLat: number;
+    minLng: number;
+    maxLng: number;
+  } {
+    const minLat = ORIGIN_LAT + rowIndex * TILE_DEG_LAT;
+    const maxLat = minLat + TILE_DEG_LAT;
+    const minLng = ORIGIN_LNG + colIndex * TILE_DEG_LNG;
+    const maxLng = minLng + TILE_DEG_LNG;
+    return { minLat, maxLat, minLng, maxLng };
   }
 }
 

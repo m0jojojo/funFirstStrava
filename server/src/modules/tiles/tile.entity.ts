@@ -1,14 +1,9 @@
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  JoinColumn,
-  ManyToOne,
-  PrimaryGeneratedColumn,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { User } from '../users/user.entity';
 
 @Entity({ name: 'tiles' })
+@Index(['rowIndex', 'colIndex'], { unique: true })
+@Index(['ownerId'])
 export class Tile {
   @PrimaryGeneratedColumn('uuid')
   id: string;
