@@ -60,7 +60,8 @@ class RunTracker extends ChangeNotifier {
       _path.add(point);
       notifyListeners();
 
-      // On Android: foreground service keeps GPS sampling when app backgrounded
+      // On Android: start foreground service (keeps process alive when backgrounded)
+      // and timer in main isolate (Geolocator only works reliably here)
       if (platform.isAndroid) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(
@@ -68,12 +69,14 @@ class RunTracker extends ChangeNotifier {
           jsonEncode([{'lat': point.lat, 'lng': point.lng, 't': point.t}]),
         );
         await _startForegroundService();
+        _startTimer(); // main-isolate timer so points keep increasing
       } else {
         _startTimer();
       }
     } catch (_) {
       if (platform.isAndroid) {
         await _startForegroundService();
+        _startTimer();
       } else {
         _startTimer();
       }
@@ -110,16 +113,33 @@ class RunTracker extends ChangeNotifier {
       try {
         final pos = await geo.Geolocator.getCurrentPosition();
         if (!_isRunning) return;
-        _path.add(
-          PathPoint(
-            lat: pos.latitude,
-            lng: pos.longitude,
-            t: DateTime.now().millisecondsSinceEpoch,
-          ),
+        final point = PathPoint(
+          lat: pos.latitude,
+          lng: pos.longitude,
+          t: DateTime.now().millisecondsSinceEpoch,
         );
+        _path.add(point);
+        if (platform.isAndroid) {
+          await _appendPointToStorage(point);
+        }
         notifyListeners();
       } catch (_) {}
     });
+  }
+
+  Future<void> _appendPointToStorage(PathPoint point) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(runPathStorageKey);
+      final list = raw != null
+          ? (jsonDecode(raw) as List<dynamic>?)
+                  ?.map((e) => e as Map<String, dynamic>)
+                  .toList() ??
+              <Map<String, dynamic>>[]
+          : <Map<String, dynamic>>[];
+      list.add({'lat': point.lat, 'lng': point.lng, 't': point.t});
+      await prefs.setString(runPathStorageKey, jsonEncode(list));
+    } catch (_) {}
   }
 
   /// Called when app resumes or receives data from foreground service
