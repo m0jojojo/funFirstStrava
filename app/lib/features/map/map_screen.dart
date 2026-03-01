@@ -48,6 +48,10 @@ class _MapScreenState extends State<MapScreen> {
   static const String _tilesLayerIdOthers = 'tiles-fill-others';
   static const String _emptyGeoJson = '{"type":"FeatureCollection","features":[]}';
 
+  static const String _runPathSourceId = 'run-path';
+  static const String _runPathLayerId = 'run-path-line';
+  bool _runPathLayerAdded = false;
+
   DateTime? _lastTilesRefreshAt;
   static const _tilesRefreshDebounce = Duration(seconds: 2);
 
@@ -70,7 +74,29 @@ class _MapScreenState extends State<MapScreen> {
       _elapsedTick?.cancel();
       _elapsedTick = null;
     }
+    _updateRunPathOnMap();
     if (mounted) setState(() {});
+  }
+
+  /// Build GeoJSON Feature with LineString from run path (coordinates as [lng, lat]).
+  String _runPathToGeoJson(List<PathPoint> path) {
+    if (path.isEmpty) {
+      return '{"type":"Feature","geometry":{"type":"LineString","coordinates":[]}}';
+    }
+    final coords = path.map((p) => [p.lng, p.lat]).toList();
+    return '{"type":"Feature","geometry":{"type":"LineString","coordinates":${jsonEncode(coords)}}}';
+  }
+
+  Future<void> _updateRunPathOnMap() async {
+    final mapboxMap = _mapboxMap;
+    if (mapboxMap == null || !_runPathLayerAdded) return;
+    final path = RunTracker.instance.path;
+    try {
+      final src = await mapboxMap.style.getSource(_runPathSourceId);
+      if (src is GeoJsonSource) {
+        await src.updateGeoJSON(_runPathToGeoJson(path));
+      }
+    } catch (_) {}
   }
 
   /// Resolve initial map center: user location, or fallback to Sector 40.
@@ -194,7 +220,23 @@ class _MapScreenState extends State<MapScreen> {
           fillOpacity: 0.6,
           fillOutlineColor: Colors.red.value,
         ));
-        if (mounted) setState(() => _tilesLayerAdded = true);
+        // Run path line (orange) — draws on top of tiles, updates live during run
+        await mapboxMap.style.addSource(GeoJsonSource(
+          id: _runPathSourceId,
+          data: _runPathToGeoJson(RunTracker.instance.path),
+        ));
+        await mapboxMap.style.addLayer(LineLayer(
+          id: _runPathLayerId,
+          sourceId: _runPathSourceId,
+          lineJoin: LineJoin.ROUND,
+          lineCap: LineCap.ROUND,
+          lineColor: Colors.orange.value,
+          lineWidth: 5.0,
+        ));
+        if (mounted) setState(() {
+          _tilesLayerAdded = true;
+          _runPathLayerAdded = true;
+        });
       } catch (e) {
         if (mounted) setState(() => _tilesError = 'Layer: $e');
       }
