@@ -51,10 +51,26 @@ class _MapScreenState extends State<MapScreen> {
   DateTime? _lastTilesRefreshAt;
   static const _tilesRefreshDebounce = Duration(seconds: 2);
 
+  Timer? _elapsedTick;
+
   @override
   void initState() {
     super.initState();
     _resolveInitialCenter();
+    RunTracker.instance.addListener(_onRunTrackerChanged);
+  }
+
+  void _onRunTrackerChanged() {
+    final running = RunTracker.instance.isRunning;
+    if (running && _elapsedTick?.isActive != true) {
+      _elapsedTick = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    } else if (!running) {
+      _elapsedTick?.cancel();
+      _elapsedTick = null;
+    }
+    if (mounted) setState(() {});
   }
 
   /// Resolve initial map center: user location, or fallback to Sector 40.
@@ -339,6 +355,8 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   void dispose() {
+    RunTracker.instance.removeListener(_onRunTrackerChanged);
+    _elapsedTick?.cancel();
     _tilesSocket?.disconnect();
     _tilesSocket?.dispose();
     super.dispose();
@@ -453,30 +471,305 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ),
               ),
+            // Metrics bar (time + tiles) — above bottom control bar
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: _mapBottomBarHeight + 12,
+              child: _MapMetricsBar(tracker: tracker),
+            ),
+            // Bottom control bar: activity type, Start/Pause/Resume, Finish
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _MapBottomControlBar(
+                tracker: tracker,
+                onStart: _startRun,
+                onPause: () => tracker.pause(),
+                onResume: () => tracker.resume(),
+                onFinish: _stopRun,
+              ),
+            ),
           ],
         ),
-        floatingActionButton: AnimatedBuilder(
-          animation: RunTracker.instance,
-          builder: (context, _) {
-            final tracker = RunTracker.instance;
-            final theme = Theme.of(context);
-            final isRunning = tracker.isRunning;
-            return FloatingActionButton.extended(
-              onPressed: isRunning ? _stopRun : _startRun,
-              backgroundColor: isRunning
-                  ? theme.colorScheme.error
-                  : theme.colorScheme.primary,
-              foregroundColor: theme.colorScheme.onPrimary,
-              icon: Icon(isRunning ? Icons.stop_rounded : Icons.directions_run_rounded),
-              label: Text(
-                isRunning ? 'Stop run · ${tracker.path.length} pts' : 'Start run',
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-              ),
-            );
-          },
-        ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       ),
+    );
+  }
+}
+
+const double _mapBottomBarHeight = 100;
+
+String _formatElapsed(Duration? d) {
+  if (d == null) return '00:00';
+  final total = d.inSeconds;
+  final min = total ~/ 60;
+  final sec = total % 60;
+  return '${min.toString().padLeft(2, '0')}:${sec.toString().padLeft(2, '0')}';
+}
+
+class _MapMetricsBar extends StatelessWidget {
+  const _MapMetricsBar({required this.tracker});
+
+  final RunTracker tracker;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final elapsed = tracker.elapsed;
+    final timeStr = _formatElapsed(elapsed);
+    final tileCount = tracker.path.length;
+
+    return Material(
+      color: colorScheme.surfaceContainerHighest.withOpacity(0.95),
+      elevation: 2,
+      shadowColor: Colors.black26,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _MetricItem(
+              value: timeStr,
+              label: 'Time',
+              colorScheme: colorScheme,
+            ),
+            _MetricItem(
+              value: '$tileCount',
+              label: 'Tiles',
+              colorScheme: colorScheme,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MetricItem extends StatelessWidget {
+  const _MetricItem({
+    required this.value,
+    required this.label,
+    required this.colorScheme,
+  });
+
+  final String value;
+  final String label;
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+            color: colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MapBottomControlBar extends StatelessWidget {
+  const _MapBottomControlBar({
+    required this.tracker,
+    required this.onStart,
+    required this.onPause,
+    required this.onResume,
+    required this.onFinish,
+  });
+
+  final RunTracker tracker;
+  final VoidCallback onStart;
+  final VoidCallback onPause;
+  final VoidCallback onResume;
+  final VoidCallback onFinish;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isRunning = tracker.isRunning;
+    final isPaused = tracker.isPaused;
+
+    return Material(
+      color: colorScheme.surfaceContainerHighest.withOpacity(0.98),
+      elevation: 8,
+      shadowColor: Colors.black38,
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: _mapBottomBarHeight,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Left: activity type (Run)
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: colorScheme.surfaceContainerHighest,
+                        border: Border.all(
+                          color: colorScheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.directions_run_rounded,
+                        color: colorScheme.primary,
+                        size: 26,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Run',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+                // Center: Start / Pause / Resume
+                Builder(
+                  builder: (context) {
+                    if (!isRunning) {
+                      return _BigRoundButton(
+                        icon: Icons.play_arrow_rounded,
+                        label: 'Start',
+                        color: colorScheme.primary,
+                        onPressed: onStart,
+                      );
+                    }
+                    if (isPaused) {
+                      return _BigRoundButton(
+                        icon: Icons.play_arrow_rounded,
+                        label: 'Resume',
+                        color: colorScheme.primary,
+                        onPressed: onResume,
+                      );
+                    }
+                    return _BigRoundButton(
+                      icon: Icons.pause_rounded,
+                      label: 'Pause',
+                      color: colorScheme.primary,
+                      onPressed: onPause,
+                    );
+                  },
+                ),
+                // Right: Finish (when running) or placeholder
+                isRunning
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Material(
+                            color: colorScheme.error.withOpacity(0.15),
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              onTap: onFinish,
+                              customBorder: const CircleBorder(),
+                              child: const SizedBox(
+                                width: 48,
+                                height: 48,
+                                child: Icon(
+                                  Icons.stop_rounded,
+                                  color: Colors.red,
+                                  size: 28,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Finish',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                        ],
+                      )
+                    : const SizedBox(width: 48, height: 56),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BigRoundButton extends StatelessWidget {
+  const _BigRoundButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Material(
+          color: color,
+          shape: const CircleBorder(),
+          elevation: 4,
+          shadowColor: Colors.black38,
+          child: InkWell(
+            onTap: onPressed,
+            customBorder: const CircleBorder(),
+            child: SizedBox(
+              width: 64,
+              height: 64,
+              child: Icon(icon, color: Colors.white, size: 40),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: colorScheme.onSurface,
+          ),
+        ),
+      ],
     );
   }
 }

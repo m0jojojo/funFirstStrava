@@ -19,11 +19,25 @@ class RunTracker extends ChangeNotifier {
   static final RunTracker instance = RunTracker._();
 
   bool _isRunning = false;
+  bool _isPaused = false;
+  DateTime? _runStartTime;
+  DateTime? _pausedAt;
+  Duration _pausedDuration = Duration.zero;
   final List<PathPoint> _path = [];
   Timer? _timer;
 
   bool get isRunning => _isRunning;
+  bool get isPaused => _isPaused;
   List<PathPoint> get path => List.unmodifiable(_path);
+
+  /// Elapsed run time (excluding paused time). Null when not running.
+  Duration? get elapsed {
+    if (_runStartTime == null) return null;
+    if (_isPaused && _pausedAt != null) {
+      return _pausedAt!.difference(_runStartTime!) - _pausedDuration;
+    }
+    return DateTime.now().difference(_runStartTime!) - _pausedDuration;
+  }
 
   Future<String?> start() async {
     if (_isRunning) return null;
@@ -47,6 +61,10 @@ class RunTracker extends ChangeNotifier {
     }
 
     _isRunning = true;
+    _isPaused = false;
+    _runStartTime = DateTime.now();
+    _pausedAt = null;
+    _pausedDuration = Duration.zero;
     _path.clear();
     notifyListeners();
 
@@ -111,8 +129,8 @@ class RunTracker extends ChangeNotifier {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 4), (_) async {
       try {
+        if (!_isRunning || _isPaused) return;
         final pos = await geo.Geolocator.getCurrentPosition();
-        if (!_isRunning) return;
         final point = PathPoint(
           lat: pos.latitude,
           lng: pos.longitude,
@@ -182,6 +200,24 @@ class RunTracker extends ChangeNotifier {
     }
   }
 
+  void pause() {
+    if (!_isRunning || _isPaused) return;
+    _isPaused = true;
+    _pausedAt = DateTime.now();
+    _timer?.cancel();
+    _timer = null;
+    notifyListeners();
+  }
+
+  void resume() {
+    if (!_isRunning || !_isPaused) return;
+    _pausedDuration += DateTime.now().difference(_pausedAt!);
+    _isPaused = false;
+    _pausedAt = null;
+    _startTimer();
+    notifyListeners();
+  }
+
   Future<RunStopResult> stop() async {
     if (!_isRunning) {
       return const RunStopResult(
@@ -193,6 +229,10 @@ class RunTracker extends ChangeNotifier {
     }
 
     _isRunning = false;
+    _isPaused = false;
+    _runStartTime = null;
+    _pausedAt = null;
+    _pausedDuration = Duration.zero;
     _timer?.cancel();
     _timer = null;
 
