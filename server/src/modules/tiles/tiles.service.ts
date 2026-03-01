@@ -99,8 +99,8 @@ export class TilesService implements OnModuleInit {
   async captureTilesByPath(
     userId: string,
     path: Array<{ lat: number; lng: number }>,
-  ): Promise<void> {
-    if (path.length === 0) return;
+  ): Promise<number> {
+    if (path.length === 0) return 0;
     const visitedKeys = new Set<string>();
     const tilesToSave: Tile[] = [];
     const previousOwnerByTile = new Map<string, string>();
@@ -133,17 +133,19 @@ export class TilesService implements OnModuleInit {
       tilesToSave.push(tile);
     }
 
-    if (tilesToSave.length === 0) return;
+    if (tilesToSave.length === 0) return 0;
 
     const saved = await this.tilesRepository.save(tilesToSave);
     const uniqueIds = new Set(saved.map((t) => t.id));
+    const count = uniqueIds.size;
 
-    this.tilesGateway.broadcastTilesUpdated(userId, uniqueIds.size);
+    this.tilesGateway.broadcastTilesUpdated(userId, count);
 
     const previousOwnerIds = [...new Set(previousOwnerByTile.values())];
     if (previousOwnerIds.length > 0) {
       await this.notifyPreviousOwners(previousOwnerIds, userId);
     }
+    return count;
   }
 
   private async notifyPreviousOwners(previousOwnerIds: string[], attackerId: string): Promise<void> {

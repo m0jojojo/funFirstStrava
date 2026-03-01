@@ -89,11 +89,11 @@ class _RunsListScreenState extends State<RunsListScreen> {
     return '${h}h ${m}m ${s}s';
   }
 
-  static String _formatDistance(double? meters) {
+  /// Distance in km with 2 decimal places, e.g. "0.05 km" or "3.53 km".
+  static String _formatDistanceKm(double? meters) {
     if (meters == null) return '—';
-    if (meters <= 0) return '0 m';
-    if (meters < 1000) return '${meters.round()} m';
-    return '${(meters / 1000).toStringAsFixed(1)} km';
+    final km = meters / 1000;
+    return '${km.toStringAsFixed(2)} km';
   }
 
   static String _formatPace(DateTime start, DateTime end, double? distanceMeters) {
@@ -210,9 +210,10 @@ class _RunsListScreenState extends State<RunsListScreen> {
                             ..._pendingRuns.map((r) => _RunCard(
                                   theme: theme,
                                   date: _formatDate(r.startedAt),
-                                  distance: _formatDistance(r.distanceMeters),
+                                  distance: _formatDistanceKm(r.distanceMeters),
                                   pace: _formatPace(r.startedAt, r.endedAt, r.distanceMeters),
                                   duration: _duration(r.startedAt, r.endedAt),
+                                  tilesCaptured: r.tilesCaptured,
                                   isPending: true,
                                 )),
                             const SizedBox(height: 16),
@@ -232,9 +233,10 @@ class _RunsListScreenState extends State<RunsListScreen> {
                             ..._runs.map((r) => _RunCard(
                                   theme: theme,
                                   date: _formatDate(r.startedAt),
-                                  distance: _formatDistance(r.distanceMeters),
+                                  distance: _formatDistanceKm(r.distanceMeters),
                                   pace: _formatPace(r.startedAt, r.endedAt, r.distanceMeters),
                                   duration: _duration(r.startedAt, r.endedAt),
+                                  tilesCaptured: r.tilesCaptured,
                                   isPending: false,
                                 )),
                           ],
@@ -252,6 +254,7 @@ class _RunCard extends StatelessWidget {
     required this.distance,
     required this.pace,
     required this.duration,
+    required this.tilesCaptured,
     required this.isPending,
   });
 
@@ -260,6 +263,7 @@ class _RunCard extends StatelessWidget {
   final String distance;
   final String pace;
   final String duration;
+  final int? tilesCaptured;
   final bool isPending;
 
   @override
@@ -304,6 +308,10 @@ class _RunCard extends StatelessWidget {
                     runSpacing: 4,
                     children: [
                       _MetricChip(label: distance, icon: Icons.straighten_rounded),
+                      _MetricChip(
+                        label: tilesCaptured != null ? '$tilesCaptured tiles' : '— tiles',
+                        icon: Icons.grid_on_rounded,
+                      ),
                       _MetricChip(label: pace, icon: Icons.speed_rounded),
                       _MetricChip(label: duration, icon: Icons.schedule_rounded),
                     ],

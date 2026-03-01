@@ -13,6 +13,7 @@ class RunSummary {
     required this.endedAt,
     required this.pathLength,
     this.distanceMeters,
+    this.tilesCaptured,
   });
 
   final String id;
@@ -21,11 +22,17 @@ class RunSummary {
   final int pathLength;
   /// Total path distance in meters. Null if not provided (e.g. old API).
   final double? distanceMeters;
+  /// Number of tiles captured when this run was saved. Null if not provided (e.g. pending or old API).
+  final int? tilesCaptured;
 
   static RunSummary fromJson(Map<String, dynamic> json) {
     double? dist;
     if (json['distanceMeters'] != null && json['distanceMeters'] is num) {
       dist = (json['distanceMeters'] as num).toDouble();
+    }
+    int? tiles;
+    if (json['tilesCaptured'] != null && json['tilesCaptured'] is num) {
+      tiles = (json['tilesCaptured'] as num).toInt();
     }
     return RunSummary(
       id: json['id']?.toString() ?? '',
@@ -33,6 +40,7 @@ class RunSummary {
       endedAt: _parseDate(json['endedAt']),
       pathLength: (json['pathLength'] is num) ? (json['pathLength'] as num).toInt() : 0,
       distanceMeters: dist,
+      tilesCaptured: tiles,
     );
   }
 

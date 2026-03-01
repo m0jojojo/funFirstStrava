@@ -34,6 +34,7 @@ export class RunsController {
       endedAt: r.endedAt,
       pathLength: r.path.length,
       distanceMeters: this.runsService.computePathDistanceM(r.path),
+      tilesCaptured: r.tilesCaptured ?? undefined,
     }));
   }
 }

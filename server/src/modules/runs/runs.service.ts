@@ -50,8 +50,9 @@ export class RunsService {
       endedAt,
       path,
     });
+    const tilesCaptured = await this.tilesService.captureTilesByPath(user.id, path);
+    run.tilesCaptured = tilesCaptured;
     const saved = await this.runRepo.save(run);
-    await this.tilesService.captureTilesByPath(user.id, path);
     return saved;
   }
 

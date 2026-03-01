@@ -36,6 +36,10 @@ export class Run {
   @Column({ type: 'jsonb', default: [] })
   path: PathPoint[];
 
+  /** Number of tiles captured when this run was saved. Null for runs created before this field. */
+  @Column({ name: 'tiles_captured', type: 'int', nullable: true })
+  tilesCaptured: number | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }
