@@ -1,9 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart' as geo;
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../platform_utils_stub.dart'
+    if (dart.library.io) '../platform_utils_io.dart' as platform;
+import 'location_task_handler.dart';
 import 'offline_run_service.dart';
 import 'run_service.dart';
 
@@ -46,16 +52,59 @@ class RunTracker extends ChangeNotifier {
 
     try {
       final pos = await geo.Geolocator.getCurrentPosition();
-      _path.add(
-        PathPoint(
-          lat: pos.latitude,
-          lng: pos.longitude,
-          t: DateTime.now().millisecondsSinceEpoch,
-        ),
+      final point = PathPoint(
+        lat: pos.latitude,
+        lng: pos.longitude,
+        t: DateTime.now().millisecondsSinceEpoch,
       );
+      _path.add(point);
       notifyListeners();
-    } catch (_) {}
 
+      // On Android: foreground service keeps GPS sampling when app backgrounded
+      if (platform.isAndroid) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(
+          runPathStorageKey,
+          jsonEncode([{'lat': point.lat, 'lng': point.lng, 't': point.t}]),
+        );
+        await _startForegroundService();
+      } else {
+        _startTimer();
+      }
+    } catch (_) {
+      if (platform.isAndroid) {
+        await _startForegroundService();
+      } else {
+        _startTimer();
+      }
+    }
+
+    return null;
+  }
+
+  Future<void> _startForegroundService() async {
+    _timer?.cancel();
+    try {
+      final perm = await FlutterForegroundTask.checkNotificationPermission();
+      if (perm != NotificationPermission.granted) {
+        await FlutterForegroundTask.requestNotificationPermission();
+      }
+      final running = await FlutterForegroundTask.isRunningService;
+      if (running) {
+        await FlutterForegroundTask.restartService();
+      } else {
+        await FlutterForegroundTask.startService(
+          notificationTitle: 'Run active',
+          notificationText: 'Tracking your run',
+          callback: startLocationTaskCallback,
+          serviceId: 256,
+          serviceTypes: [ForegroundServiceTypes.location],
+        );
+      }
+    } catch (_) {}
+  }
+
+  void _startTimer() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 4), (_) async {
       try {
@@ -71,8 +120,46 @@ class RunTracker extends ChangeNotifier {
         notifyListeners();
       } catch (_) {}
     });
+  }
 
-    return null;
+  /// Called when app resumes or receives data from foreground service
+  /// to refresh path count for UI (FAB point count).
+  Future<void> refreshPathFromStorage() async {
+    if (!platform.isAndroid || !_isRunning) return;
+    final loaded = await _loadPathFromStorage();
+    if (loaded.length != _path.length) {
+      _path.clear();
+      _path.addAll(loaded);
+      notifyListeners();
+    }
+  }
+
+  Future<List<PathPoint>> _loadPathFromStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(runPathStorageKey);
+      if (raw == null || raw.isEmpty) return [];
+      final list = jsonDecode(raw) as List<dynamic>?;
+      if (list == null || list.isEmpty) return [];
+      final path = <PathPoint>[];
+      for (final e in list) {
+        if (e is Map<String, dynamic>) {
+          final lat = e['lat'];
+          final lng = e['lng'];
+          final t = e['t'];
+          if (lat is num && lng is num && t is num) {
+            path.add(PathPoint(
+              lat: lat.toDouble(),
+              lng: lng.toDouble(),
+              t: t.toInt(),
+            ));
+          }
+        }
+      }
+      return path;
+    } catch (_) {
+      return List<PathPoint>.from(_path);
+    }
   }
 
   Future<RunStopResult> stop() async {
@@ -88,9 +175,24 @@ class RunTracker extends ChangeNotifier {
     _isRunning = false;
     _timer?.cancel();
     _timer = null;
+
+    // On Android: read path from foreground service storage (it persists there)
+    List<PathPoint> pathToSubmit;
+    if (platform.isAndroid) {
+      try {
+        await FlutterForegroundTask.stopService();
+      } catch (_) {}
+      pathToSubmit = await _loadPathFromStorage();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(runPathStorageKey);
+    } else {
+      pathToSubmit = List<PathPoint>.from(_path);
+      _path.clear();
+    }
+    _path.clear();
     notifyListeners();
 
-    if (_path.isEmpty) {
+    if (pathToSubmit.isEmpty) {
       return const RunStopResult(
         success: false,
         points: 0,
@@ -98,10 +200,6 @@ class RunTracker extends ChangeNotifier {
         message: 'No points recorded',
       );
     }
-
-    final pathToSubmit = List<PathPoint>.from(_path);
-    _path.clear();
-    notifyListeners();
 
     try {
       final user = FirebaseAuth.instance.currentUser;
