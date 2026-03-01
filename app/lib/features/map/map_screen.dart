@@ -429,11 +429,27 @@ class _MapScreenState extends State<MapScreen> {
                 right: 16,
                 top: MediaQuery.of(context).padding.top + 8,
                 child: Material(
-                  color: Colors.white70,
-                  borderRadius: BorderRadius.circular(8),
+                  color: Theme.of(context).colorScheme.surface,
+                  elevation: 2,
+                  shadowColor: Colors.black26,
+                  borderRadius: BorderRadius.circular(12),
                   child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Text(_tilesError!, style: const TextStyle(color: Colors.black87, fontSize: 12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline_rounded, size: 20, color: Theme.of(context).colorScheme.primary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _tilesError!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -443,11 +459,19 @@ class _MapScreenState extends State<MapScreen> {
           animation: RunTracker.instance,
           builder: (context, _) {
             final tracker = RunTracker.instance;
+            final theme = Theme.of(context);
+            final isRunning = tracker.isRunning;
             return FloatingActionButton.extended(
-              onPressed: tracker.isRunning ? _stopRun : _startRun,
-              backgroundColor: tracker.isRunning ? Colors.red : Colors.green,
-              icon: Icon(tracker.isRunning ? Icons.stop : Icons.directions_run),
-              label: Text(tracker.isRunning ? 'Stop run · ${tracker.path.length} pts' : 'Start run'),
+              onPressed: isRunning ? _stopRun : _startRun,
+              backgroundColor: isRunning
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.primary,
+              foregroundColor: theme.colorScheme.onPrimary,
+              icon: Icon(isRunning ? Icons.stop_rounded : Icons.directions_run_rounded),
+              label: Text(
+                isRunning ? 'Stop run · ${tracker.path.length} pts' : 'Start run',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+              ),
             );
           },
         ),

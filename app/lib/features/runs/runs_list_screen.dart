@@ -46,9 +46,7 @@ class _RunsListScreenState extends State<RunsListScreen> {
         if (token != null) {
           runs = await fetchMyRuns(token);
         }
-      } catch (_) {
-        // Offline: still show pending runs
-      }
+      } catch (_) {}
       if (mounted) {
         setState(() {
           _pendingRuns = pending;
@@ -98,7 +96,6 @@ class _RunsListScreenState extends State<RunsListScreen> {
     return '${(meters / 1000).toStringAsFixed(1)} km';
   }
 
-  /// Pace as min:sec per km. Returns "—" if distance missing or zero.
   static String _formatPace(DateTime start, DateTime end, double? distanceMeters) {
     if (distanceMeters == null || distanceMeters <= 0) return '—';
     final sec = end.difference(start).inSeconds;
@@ -112,13 +109,17 @@ class _RunsListScreenState extends State<RunsListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('My runs'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
             onPressed: _loading ? null : _load,
+            tooltip: 'Refresh',
           ),
         ],
       ),
@@ -131,19 +132,61 @@ class _RunsListScreenState extends State<RunsListScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(_error!, textAlign: TextAlign.center),
+                        Icon(
+                          Icons.error_outline_rounded,
+                          size: 48,
+                          color: colorScheme.error,
+                        ),
                         const SizedBox(height: 16),
-                        FilledButton(
+                        Text(
+                          _error!,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: colorScheme.onSurface,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 24),
+                        FilledButton.icon(
                           onPressed: _load,
-                          child: const Text('Retry'),
+                          icon: const Icon(Icons.refresh_rounded, size: 20),
+                          label: const Text('Retry'),
                         ),
                       ],
                     ),
                   ),
                 )
               : _pendingRuns.isEmpty && _runs.isEmpty
-                  ? const Center(
-                      child: Text('No runs yet. Record one from the map!'),
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.directions_run_rounded,
+                              size: 64,
+                              color: colorScheme.primary.withOpacity(0.5),
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              'No runs yet',
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: colorScheme.onSurface,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Open the map, tap Start run, and go for a run to claim territory.',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
                     )
                   : RefreshIndicator(
                       onRefresh: () async {
@@ -151,58 +194,161 @@ class _RunsListScreenState extends State<RunsListScreen> {
                         await _load();
                       },
                       child: ListView(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                         children: [
                           if (_pendingRuns.isNotEmpty) ...[
                             Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                              padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
                               child: Text(
-                                'Pending upload (offline)',
-                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                      color: Theme.of(context).colorScheme.primary,
-                                    ),
+                                'Pending upload',
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  color: colorScheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
-                            ..._pendingRuns.map((r) => ListTile(
-                                  leading: CircleAvatar(
-                                    child: Icon(
-                                      Icons.cloud_off,
-                                      color: Theme.of(context).colorScheme.onPrimary,
-                                    ),
-                                  ),
-                                  title: Text(_formatDate(r.startedAt)),
-                                  subtitle: Text(
-                                    '${_formatDistance(r.distanceMeters)} · ${_formatPace(r.startedAt, r.endedAt, r.distanceMeters)} · ${_duration(r.startedAt, r.endedAt)} · will sync when online',
-                                  ),
+                            ..._pendingRuns.map((r) => _RunCard(
+                                  theme: theme,
+                                  date: _formatDate(r.startedAt),
+                                  distance: _formatDistance(r.distanceMeters),
+                                  pace: _formatPace(r.startedAt, r.endedAt, r.distanceMeters),
+                                  duration: _duration(r.startedAt, r.endedAt),
+                                  isPending: true,
                                 )),
-                            const Divider(height: 24),
+                            const SizedBox(height: 16),
                           ],
-                          if (_runs.isNotEmpty)
+                          if (_runs.isNotEmpty) ...[
                             if (_pendingRuns.isNotEmpty)
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                                padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
                                 child: Text(
                                   'Saved',
-                                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                        color: Theme.of(context).colorScheme.primary,
-                                      ),
-                                ),
-                              ),
-                          ..._runs.map((r) => ListTile(
-                                leading: CircleAvatar(
-                                  child: Icon(
-                                    Icons.directions_run,
-                                    color: Theme.of(context).colorScheme.onPrimary,
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    color: colorScheme.primary,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                                title: Text(_formatDate(r.startedAt)),
-                                subtitle: Text(
-                                  '${_formatDistance(r.distanceMeters)} · ${_formatPace(r.startedAt, r.endedAt, r.distanceMeters)} · ${_duration(r.startedAt, r.endedAt)}',
-                                ),
-                              )),
+                              ),
+                            ..._runs.map((r) => _RunCard(
+                                  theme: theme,
+                                  date: _formatDate(r.startedAt),
+                                  distance: _formatDistance(r.distanceMeters),
+                                  pace: _formatPace(r.startedAt, r.endedAt, r.distanceMeters),
+                                  duration: _duration(r.startedAt, r.endedAt),
+                                  isPending: false,
+                                )),
+                          ],
                         ],
                       ),
                     ),
+    );
+  }
+}
+
+class _RunCard extends StatelessWidget {
+  const _RunCard({
+    required this.theme,
+    required this.date,
+    required this.distance,
+    required this.pace,
+    required this.duration,
+    required this.isPending,
+  });
+
+  final ThemeData theme;
+  final String date;
+  final String distance;
+  final String pace;
+  final String duration;
+  final bool isPending;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = theme.colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isPending
+                    ? colorScheme.tertiaryContainer.withOpacity(0.5)
+                    : colorScheme.primaryContainer.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                isPending ? Icons.cloud_off_rounded : Icons.directions_run_rounded,
+                color: isPending ? colorScheme.tertiary : colorScheme.primary,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    date,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 4,
+                    children: [
+                      _MetricChip(label: distance, icon: Icons.straighten_rounded),
+                      _MetricChip(label: pace, icon: Icons.speed_rounded),
+                      _MetricChip(label: duration, icon: Icons.schedule_rounded),
+                    ],
+                  ),
+                  if (isPending) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Will sync when online',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.outline,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MetricChip extends StatelessWidget {
+  const _MetricChip({required this.label, required this.icon});
+
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
     );
   }
 }

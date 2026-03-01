@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'core/app_theme.dart';
 import 'features/auth/login_screen.dart';
 import 'features/home/home_screen.dart';
 import 'firebase_options.dart';
@@ -80,11 +81,8 @@ class _TerritoryGameAppState extends State<TerritoryGameApp>
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Territory Game',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
+      title: 'gogo',
+      theme: AppTheme.light,
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
