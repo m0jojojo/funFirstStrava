@@ -15,14 +15,25 @@ export class RunsController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@CurrentUser() user: User, @Body() dto: CreateRunDto) {
-    const run = await this.runsService.create(user, dto.path);
-    this.logger.log(`Run created id=${run.id} userId=${user.id} points=${run.path.length}`);
-    return {
-      id: run.id,
-      startedAt: run.startedAt,
-      endedAt: run.endedAt,
-      pathLength: run.path.length,
-    };
+    try {
+      const run = await this.runsService.create(user, dto.path);
+      this.logger.log(`Run created id=${run.id} userId=${user.id} points=${run.path.length}`);
+      return {
+        id: run.id,
+        startedAt: run.startedAt,
+        endedAt: run.endedAt,
+        pathLength: run.path.length,
+      };
+    } catch (error) {
+      const pathLength = Array.isArray(dto.path) ? dto.path.length : 0;
+      this.logger.error(
+        `Failed to create run for userId=${user.id} pathLength=${pathLength}: ${error instanceof Error ? error.message : String(
+          error,
+        )}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      throw error;
+    }
   }
 
   @Get('me')

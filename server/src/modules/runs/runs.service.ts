@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PathPoint } from './run.entity';
@@ -19,6 +19,8 @@ export class RunsService {
     private readonly tilesService: TilesService,
   ) {}
 
+  private readonly logger = new Logger(RunsService.name);
+
   /** Phase 6.4 anti-cheat: reject path if any segment exceeds max speed. Skips segments with large time gaps (background GPS). */
   private validatePath(path: PathPoint[]): void {
     for (let i = 1; i < path.length; i++) {
@@ -30,6 +32,12 @@ export class RunsService {
       const distM = haversineM(a.lat, a.lng, b.lat, b.lng);
       const speedMs = distM / (dtMs / 1000);
       if (speedMs > MAX_SPEED_MS) {
+        // Log enough context so we can debug 400s in Railway logs.
+        this.logger.warn(
+          `Rejecting run path: segment index=${i - 1}->${i} dtMs=${dtMs} distM=${distM.toFixed(
+            1,
+          )} speedMs=${speedMs.toFixed(2)} (max=${MAX_SPEED_MS})`,
+        );
         throw new BadRequestException(
           `Path invalid: segment speed ${speedMs.toFixed(1)} m/s exceeds max ${MAX_SPEED_MS} m/s`,
         );
