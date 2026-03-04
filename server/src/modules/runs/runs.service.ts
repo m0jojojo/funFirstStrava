@@ -17,6 +17,14 @@ const MIN_DIST_FOR_REJECT_M = 150;
 const GAP_SKIP_MS = 60_000; // 1 minute
 /** Minimum segment distance to count towards total distance (meters). Filters out small GPS jitter. */
 const MIN_SEGMENT_DISTANCE_M = 8;
+/** Sliding window length (ms) for stationary detection. If net displacement in window is below threshold, segments in that window count as zero distance. */
+const STATIONARY_WINDOW_MS = 180_000; // 3 minutes
+/** Max net displacement (m) within a window to treat that window as stationary (user not really moving). */
+const STATIONARY_DISPLACEMENT_M = 30;
+/** Apply global distance cap only when net displacement is below this (m) and sum distance above next constant. */
+const NET_DISPLACEMENT_CAP_NET_MAX_M = 50;
+/** Min sum distance (m) to consider applying the global net-displacement cap. */
+const MIN_SUM_FOR_CAP_M = 500;
 
 @Injectable()
 export class RunsService {
@@ -92,11 +100,22 @@ export class RunsService {
     });
   }
 
-  /** Total path distance in meters (Haversine sum over consecutive points). */
+  /** Total path distance in meters (Haversine sum over consecutive points).
+   * Applies sliding-window stationary filter (zero distance when net displacement in window is below threshold)
+   * and a conservative global net-displacement cap for mostly-stationary runs. */
   computePathDistanceM(path: PathPoint[]): number {
     if (path.length < 2) return 0;
+    let left = 0;
     let total = 0;
     for (let i = 1; i < path.length; i++) {
+      const ti = path[i].t ?? 0;
+      const windowStart = ti - STATIONARY_WINDOW_MS;
+      while (left < i && (path[left].t ?? 0) < windowStart) left++;
+      const netInWindow =
+        left < i
+          ? netDisplacementInWindow(path, left, i)
+          : 0;
+      const isStationary = netInWindow < STATIONARY_DISPLACEMENT_M;
       const distM = haversineM(
         path[i - 1].lat,
         path[i - 1].lng,
@@ -104,7 +123,14 @@ export class RunsService {
         path[i].lng,
       );
       if (distM < MIN_SEGMENT_DISTANCE_M) continue;
-      total += distM;
+      if (!isStationary) total += distM;
+    }
+    const netTotal = netDisplacementInWindow(path, 0, path.length - 1);
+    if (
+      netTotal < NET_DISPLACEMENT_CAP_NET_MAX_M &&
+      total > MIN_SUM_FOR_CAP_M
+    ) {
+      total = Math.min(total, netTotal * 1.5);
     }
     return total;
   }
@@ -132,4 +158,17 @@ function haversineM(
 
 function toRad(deg: number): number {
   return (deg * Math.PI) / 180;
+}
+
+/** Net displacement in meters between first and last point in the given path index range (Haversine). */
+function netDisplacementInWindow(
+  path: PathPoint[],
+  startIdx: number,
+  endIdx: number,
+): number {
+  if (startIdx >= path.length || endIdx >= path.length || startIdx > endIdx)
+    return 0;
+  const a = path[startIdx];
+  const b = path[endIdx];
+  return haversineM(a.lat, a.lng, b.lat, b.lng);
 }
