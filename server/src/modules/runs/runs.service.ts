@@ -15,6 +15,8 @@ const HARD_MAX_SPEED_MS = 25;
 const MIN_DIST_FOR_REJECT_M = 150;
 /** Segments with time gap above this (ms) are not speed-checked. Handles background GPS throttling / long pauses. */
 const GAP_SKIP_MS = 60_000; // 1 minute
+/** Minimum segment distance to count towards total distance (meters). Filters out small GPS jitter. */
+const MIN_SEGMENT_DISTANCE_M = 8;
 
 @Injectable()
 export class RunsService {
@@ -35,6 +37,8 @@ export class RunsService {
       if (dtMs <= 0) continue;
       if (dtMs > GAP_SKIP_MS) continue; // long gap = pause or background GPS; don't treat as teleport
       const distM = haversineM(a.lat, a.lng, b.lat, b.lng);
+      // Ignore very small moves entirely for validation (likely GPS jitter).
+      if (distM < MIN_SEGMENT_DISTANCE_M) continue;
       const speedMs = distM / (dtMs / 1000);
       if (speedMs > HARD_MAX_SPEED_MS && distM > MIN_DIST_FOR_REJECT_M) {
         // Clearly impossible / vehicle-speed jump: reject the whole run.
@@ -93,12 +97,14 @@ export class RunsService {
     if (path.length < 2) return 0;
     let total = 0;
     for (let i = 1; i < path.length; i++) {
-      total += haversineM(
+      const distM = haversineM(
         path[i - 1].lat,
         path[i - 1].lng,
         path[i].lat,
         path[i].lng,
       );
+      if (distM < MIN_SEGMENT_DISTANCE_M) continue;
+      total += distM;
     }
     return total;
   }
