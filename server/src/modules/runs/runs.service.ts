@@ -6,8 +6,13 @@ import { Run } from './run.entity';
 import { TilesService } from '../tiles/tiles.service';
 import { User } from '../users/user.entity';
 
-/** Max allowed speed between consecutive path points (m/s). ~54 km/h; rejects driving/teleport. */
-const MAX_SPEED_MS = 15;
+/** Soft max speed between consecutive points (m/s). Above this we treat the segment as suspicious. ~25 km/h. */
+const SOFT_MAX_SPEED_MS = 7;
+/** Hard max speed (m/s). Above this we reject the whole run as clearly impossible. ~90 km/h. */
+const HARD_MAX_SPEED_MS = 25;
+/** Minimum distance (m) required to hard-reject a high-speed segment.
+ *  This avoids rejecting runs due to small GPS jitter when the user is standing still. */
+const MIN_DIST_FOR_REJECT_M = 150;
 /** Segments with time gap above this (ms) are not speed-checked. Handles background GPS throttling / long pauses. */
 const GAP_SKIP_MS = 60_000; // 1 minute
 
@@ -31,16 +36,27 @@ export class RunsService {
       if (dtMs > GAP_SKIP_MS) continue; // long gap = pause or background GPS; don't treat as teleport
       const distM = haversineM(a.lat, a.lng, b.lat, b.lng);
       const speedMs = distM / (dtMs / 1000);
-      if (speedMs > MAX_SPEED_MS) {
-        // Log enough context so we can debug 400s in Railway logs.
+      if (speedMs > HARD_MAX_SPEED_MS && distM > MIN_DIST_FOR_REJECT_M) {
+        // Clearly impossible / vehicle-speed jump: reject the whole run.
         this.logger.warn(
-          `Rejecting run path: segment index=${i - 1}->${i} dtMs=${dtMs} distM=${distM.toFixed(
+          `Rejecting run path (hard limit): segment index=${i - 1}->${i} dtMs=${dtMs} distM=${distM.toFixed(
             1,
-          )} speedMs=${speedMs.toFixed(2)} (max=${MAX_SPEED_MS})`,
+          )} speedMs=${speedMs.toFixed(2)} (hardMax=${HARD_MAX_SPEED_MS})`,
         );
         throw new BadRequestException(
-          `Path invalid: segment speed ${speedMs.toFixed(1)} m/s exceeds max ${MAX_SPEED_MS} m/s`,
+          `Path invalid: segment speed ${speedMs.toFixed(
+            1,
+          )} m/s exceeds hard max ${HARD_MAX_SPEED_MS} m/s`,
         );
+      }
+      if (speedMs > SOFT_MAX_SPEED_MS && distM > MIN_DIST_FOR_REJECT_M) {
+        // Likely vehicle movement: log and skip this segment instead of rejecting entire run.
+        this.logger.warn(
+          `Skipping high-speed segment: index=${i - 1}->${i} dtMs=${dtMs} distM=${distM.toFixed(
+            1,
+          )} speedMs=${speedMs.toFixed(2)} (softMax=${SOFT_MAX_SPEED_MS})`,
+        );
+        continue;
       }
     }
   }
