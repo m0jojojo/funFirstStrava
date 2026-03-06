@@ -59,31 +59,44 @@ class _LoginScreenState extends State<LoginScreen> {
     final supported = _isGoogleSignInSupported;
 
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 28),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(height: 24),
-                Text(
-                  'gogo',
-                  style: theme.textTheme.headlineLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: colorScheme.primary,
-                    letterSpacing: -0.5,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFFFF6B6B),
+              Color(0xFFFF8E7F),
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 32),
+                  Text(
+                    'gogo',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.displaySmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 2,
+                      color: Colors.white,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Run to claim territory.',
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+                  const SizedBox(height: 8),
+                  Text(
+                    'Own your streets.\nTurn every run into territory.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: Colors.white.withOpacity(0.9),
+                    ),
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 48),
+                  const SizedBox(height: 56),
                 if (!supported) ...[
                   Text(
                     'Sign in with Google isn’t available on this device.',
@@ -114,42 +127,65 @@ class _LoginScreenState extends State<LoginScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: colorScheme.errorContainer.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.black.withOpacity(0.45),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                       child: Text(
                         _error!,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.error,
+                          color: Colors.white,
                         ),
                         textAlign: TextAlign.center,
                       ),
                     ),
                     const SizedBox(height: 20),
                   ],
-                  FilledButton.icon(
-                    onPressed: _loading ? null : _signInWithGoogle,
-                    icon: _loading
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: colorScheme.onPrimary,
-                            ),
-                          )
-                        : const Icon(Icons.login_rounded, size: 20),
-                    label: Text(_loading ? 'Signing in…' : 'Sign in with Google'),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      textStyle: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                  SizedBox(
+                    height: 54,
+                    child: ElevatedButton(
+                      onPressed: _loading ? null : _signInWithGoogle,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_loading)
+                            SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          else
+                            const Icon(Icons.login_rounded, size: 20),
+                          const SizedBox(width: 8),
+                          Text(_loading ? 'Signing in…' : 'Sign in to start running'),
+                        ],
                       ),
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'By continuing you agree to the Terms and Privacy Policy.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.white70,
+                    ),
+                  ),
                 ],
-                const SizedBox(height: 48),
+                const SizedBox(height: 64),
               ],
             ),
           ),

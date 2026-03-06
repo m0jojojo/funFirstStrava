@@ -7,11 +7,14 @@ import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:http/http.dart' as http;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
 import '../../core/api_config.dart';
 import '../../services/run_service.dart';
 import '../../services/run_tracker.dart';
+import '../runs/runs_list_screen.dart';
+import 'onboarding_dialog.dart';
 
 /// Full-screen map (Mapbox). Android/iOS only; requires ACCESS_TOKEN via --dart-define.
 /// Fetches tiles from backend and draws them as a fill layer (Phase 5.3).
@@ -34,6 +37,12 @@ class _MapScreenState extends State<MapScreen> {
   double? _initialLng;
 
   io.Socket? _tilesSocket;
+
+  /// User-selected territory color (used for \"your\" tiles).
+  Color _userTerritoryColor = const Color(0xFFFF4B5C);
+
+  bool _batteryDialogShown = false;
+  bool _territoryOnboardingShown = false;
 
   /// Fallback center: Sector 40 Gurgaon (when location unavailable). Position is (lng, lat).
   static const double _defaultLng = 77.054319;
@@ -60,8 +69,23 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
+    _initClientState();
     _resolveInitialCenter();
     RunTracker.instance.addListener(_onRunTrackerChanged);
+  }
+
+  Future<void> _initClientState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final colorHex = prefs.getInt('territory_color_hex_v1');
+      if (colorHex != null) {
+        _userTerritoryColor = Color(colorHex);
+      }
+      _batteryDialogShown = prefs.getBool('battery_opt_shown_v1') ?? false;
+      _territoryOnboardingShown =
+          prefs.getBool('territory_onboarding_shown_v1') ?? false;
+      if (mounted) setState(() {});
+    } catch (_) {}
   }
 
   void _onRunTrackerChanged() {
@@ -206,13 +230,15 @@ class _MapScreenState extends State<MapScreen> {
           fillOpacity: 0.5,
           fillOutlineColor: Colors.grey.value,
         ));
-        await mapboxMap.style.addLayer(FillLayer(
-          id: _tilesLayerIdYours,
-          sourceId: _tilesSourceIdYours,
-          fillColor: Colors.blue.withOpacity(0.4).value,
-          fillOpacity: 0.6,
-          fillOutlineColor: Colors.blue.value,
-        ));
+        await mapboxMap.style.addLayer(
+          FillLayer(
+            id: _tilesLayerIdYours,
+            sourceId: _tilesSourceIdYours,
+            fillColor: _userTerritoryColor.withOpacity(0.45).value,
+            fillOpacity: 0.7,
+            fillOutlineColor: _userTerritoryColor.value,
+          ),
+        );
         await mapboxMap.style.addLayer(FillLayer(
           id: _tilesLayerIdOthers,
           sourceId: _tilesSourceIdOthers,
@@ -377,11 +403,183 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _startRun() async {
+    if (!_territoryOnboardingShown && mounted) {
+      await _showTerritoryOnboarding();
+    }
     final error = await RunTracker.instance.start();
     if (!mounted) return;
     if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
     }
+  }
+
+  Future<void> _maybeShowBatteryOptimizationDialog(BuildContext context) async {
+    if (_batteryDialogShown || !mounted) return;
+    _batteryDialogShown = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('battery_opt_shown_v1', true);
+    } catch (_) {}
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E2027),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text(
+            'Battery optimisation detected',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          content: const Text(
+            'Battery optimisation can interrupt run tracking when your phone is locked or gogo is in the background. '
+            'Open settings and disable optimisation for gogo to keep GPS tracking smoothly.',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Later'),
+            ),
+            TextButton(
+              onPressed: () async {
+                try {
+                  await geo.Geolocator.openAppSettings();
+                } catch (_) {}
+                if (context.mounted) Navigator.of(context).pop();
+              },
+              child: const Text('Open settings'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showTerritoryOnboarding() async {
+    if (_territoryOnboardingShown || !mounted) return;
+    _territoryOnboardingShown = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('territory_onboarding_shown_v1', true);
+    } catch (_) {}
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return _OnboardingDialog(
+          title: 'Run to claim tiles',
+          message:
+              'Every time you run through a street, you claim the tiles under your path. '
+              'The more you run, the more of your city becomes gogo blue.',
+        );
+      },
+    );
+
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return _OnboardingDialog(
+          title: 'Others can steal your tiles',
+          message:
+              'If someone runs after you, they can capture your tiles. '
+              'Stay consistent to keep your territory.',
+        );
+      },
+    );
+
+    if (!mounted) return;
+
+    await _showColorPickerDialog();
+  }
+
+  Future<void> _showColorPickerDialog() async {
+    final colors = <Color>[
+      const Color(0xFF4CAF50),
+      const Color(0xFFFF4B5C),
+      const Color(0xFF2196F3),
+      const Color(0xFFFFC107),
+      const Color(0xFF9C27B0),
+      const Color(0xFFFF9800),
+      const Color(0xFF00BCD4),
+      const Color(0xFF607D8B),
+    ];
+
+    Color tempSelection = _userTerritoryColor;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E2027),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text(
+            'Choose your territory colour',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: colors.map((c) {
+                  final isSelected = c.value == tempSelection.value;
+                  return GestureDetector(
+                    onTap: () {
+                      tempSelection = c;
+                      (context as Element).markNeedsBuild();
+                    },
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: c,
+                        border: Border.all(
+                          color: isSelected ? Colors.white : Colors.white30,
+                          width: isSelected ? 3 : 1,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Skip'),
+            ),
+            TextButton(
+              onPressed: () async {
+                _userTerritoryColor = tempSelection;
+                try {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setInt(
+                      'territory_color_hex_v1', _userTerritoryColor.value);
+                } catch (_) {}
+                if (context.mounted) Navigator.of(context).pop();
+              },
+              child: const Text('Next'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _stopRun() async {
@@ -460,6 +658,13 @@ class _MapScreenState extends State<MapScreen> {
 
     final tracker = RunTracker.instance;
 
+    // One-shot post-frame hook for onboarding / battery dialogs.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_batteryDialogShown) {
+        _maybeShowBatteryOptimizationDialog(context);
+      }
+    });
+
     return WillPopScope(
       onWillPop: () async {
         if (tracker.isRunning && mounted) {
@@ -482,6 +687,45 @@ class _MapScreenState extends State<MapScreen> {
               onMapCreated: _onMapCreated,
               onStyleLoadedListener: _onStyleLoaded,
               onMapIdleListener: _onMapIdle,
+            ),
+            // Top-right: open My runs from map screen.
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 12,
+              right: 16,
+              child: Material(
+                color: Colors.black.withOpacity(0.6),
+                borderRadius: BorderRadius.circular(20),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const RunsListScreen(),
+                      ),
+                    );
+                  },
+                  child: const Padding(
+                    padding:
+                        EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.directions_run_rounded,
+                            size: 18, color: Colors.white),
+                        SizedBox(width: 6),
+                        Text(
+                          'My runs',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
             if (_tilesError != null)
               Positioned(
@@ -564,9 +808,9 @@ class _MapMetricsBar extends StatelessWidget {
     final tileCount = tracker.path.length;
 
     return Material(
-      color: colorScheme.surfaceContainerHighest.withOpacity(0.95),
-      elevation: 2,
-      shadowColor: Colors.black26,
+      color: Colors.black.withOpacity(0.75),
+      elevation: 6,
+      shadowColor: Colors.black54,
       borderRadius: BorderRadius.circular(16),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -611,7 +855,7 @@ class _MetricItem extends StatelessWidget {
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w700,
-            color: colorScheme.onSurface,
+            color: Colors.white,
           ),
         ),
         const SizedBox(height: 4),
@@ -619,7 +863,7 @@ class _MetricItem extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: 12,
-            color: colorScheme.onSurfaceVariant,
+            color: Colors.white70,
           ),
         ),
       ],
@@ -650,7 +894,7 @@ class _MapBottomControlBar extends StatelessWidget {
     final isPaused = tracker.isPaused;
 
     return Material(
-      color: colorScheme.surfaceContainerHighest.withOpacity(0.98),
+      color: Colors.black.withOpacity(0.9),
       elevation: 8,
       shadowColor: Colors.black38,
       child: SafeArea(
@@ -691,7 +935,7 @@ class _MapBottomControlBar extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: colorScheme.onSurface,
+                        color: Colors.white,
                       ),
                     ),
                   ],
@@ -752,7 +996,7 @@ class _MapBottomControlBar extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: colorScheme.onSurface,
+                              color: Colors.white,
                             ),
                           ),
                         ],
@@ -782,8 +1026,6 @@ class _BigRoundButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -808,7 +1050,7 @@ class _BigRoundButton extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: colorScheme.onSurface,
+            color: Colors.white,
           ),
         ),
       ],
