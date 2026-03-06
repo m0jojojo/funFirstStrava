@@ -471,7 +471,7 @@ class _MapScreenState extends State<MapScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) {
-        return _OnboardingDialog(
+        return const OnboardingDialog(
           title: 'Run to claim tiles',
           message:
               'Every time you run through a street, you claim the tiles under your path. '
@@ -486,7 +486,7 @@ class _MapScreenState extends State<MapScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) {
-        return _OnboardingDialog(
+        return const OnboardingDialog(
           title: 'Others can steal your tiles',
           message:
               'If someone runs after you, they can capture your tiles. '

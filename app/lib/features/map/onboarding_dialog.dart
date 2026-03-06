@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-class _OnboardingDialog extends StatelessWidget {
-  const _OnboardingDialog({
+class OnboardingDialog extends StatelessWidget {
+  const OnboardingDialog({
+    super.key,
     required this.title,
     required this.message,
   });
