@@ -87,8 +87,8 @@ class _MapScreenState extends State<MapScreen> {
       if (colorHex != null) {
         _userTerritoryColor = Color(colorHex);
       }
-      _batteryDialogShown =
-          prefs.getBool(_prefsKey('battery_opt_shown_v1')) ?? false;
+      // Battery optimisation warning is app-wide (not per user).
+      _batteryDialogShown = prefs.getBool('battery_opt_shown_v1') ?? false;
       _territoryOnboardingShown =
           prefs.getBool(_prefsKey('territory_onboarding_shown_v1')) ?? false;
       if (mounted) setState(() {});
@@ -249,9 +249,11 @@ class _MapScreenState extends State<MapScreen> {
         await mapboxMap.style.addLayer(FillLayer(
           id: _tilesLayerIdOthers,
           sourceId: _tilesSourceIdOthers,
-          fillColor: Colors.red.withOpacity(0.4).value,
-          fillOpacity: 0.6,
-          fillOutlineColor: Colors.red.value,
+          // Show all acquired tiles in the player's chosen colour,
+          // with slightly lower opacity than their own tiles.
+          fillColor: _userTerritoryColor.withOpacity(0.25).value,
+          fillOpacity: 0.5,
+          fillOutlineColor: _userTerritoryColor.withOpacity(0.8).value,
         ));
         // Run path line (orange) — draws on top of tiles, updates live during run
         await mapboxMap.style.addSource(GeoJsonSource(
