@@ -81,7 +81,7 @@ class _TerritoryGameAppState extends State<TerritoryGameApp>
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'gogo',
+      title: 'gogo <3',
       theme: AppTheme.light,
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),

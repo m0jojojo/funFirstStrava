@@ -89,7 +89,7 @@ class _LoginScreenState extends State<LoginScreen> {
       children: [
         const SizedBox(height: 32),
         Text(
-          'gogo',
+          'gogo <3',
           textAlign: TextAlign.center,
           style: theme.textTheme.displaySmall?.copyWith(
             fontWeight: FontWeight.w800,
