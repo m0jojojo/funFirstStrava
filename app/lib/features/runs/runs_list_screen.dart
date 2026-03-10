@@ -113,8 +113,19 @@ class _RunsListScreenState extends State<RunsListScreen> {
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: const Text('My runs'),
+        elevation: 0,
+        backgroundColor: colorScheme.surface,
+        foregroundColor: colorScheme.onSurface,
+        centerTitle: true,
+        title: Text(
+          'My runs',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: colorScheme.onSurface,
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
@@ -270,7 +281,12 @@ class _RunCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = theme.colorScheme;
 
-    return Card(
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFF181A22),
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -280,14 +296,14 @@ class _RunCard extends StatelessWidget {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: isPending
-                    ? colorScheme.tertiaryContainer.withOpacity(0.5)
-                    : colorScheme.primaryContainer.withOpacity(0.5),
-                borderRadius: BorderRadius.circular(12),
+                    ? const Color(0xFF2E313D)
+                    : const Color(0xFF252836),
+                borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(
                 isPending ? Icons.cloud_off_rounded : Icons.directions_run_rounded,
                 color: isPending ? colorScheme.tertiary : colorScheme.primary,
-                size: 24,
+                size: 26,
               ),
             ),
             const SizedBox(width: 16),
@@ -298,14 +314,14 @@ class _RunCard extends StatelessWidget {
                   Text(
                     date,
                     style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurface,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   Wrap(
                     spacing: 12,
-                    runSpacing: 4,
+                    runSpacing: 6,
                     children: [
                       _MetricChip(label: distance, icon: Icons.straighten_rounded),
                       _MetricChip(
@@ -317,11 +333,11 @@ class _RunCard extends StatelessWidget {
                     ],
                   ),
                   if (isPending) ...[
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     Text(
                       'Will sync when online',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.outline,
+                        color: Colors.white60,
                         fontStyle: FontStyle.italic,
                       ),
                     ),
@@ -348,12 +364,12 @@ class _MetricChip extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
+        Icon(icon, size: 16, color: Colors.white70),
         const SizedBox(width: 4),
         Text(
           label,
           style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+            color: Colors.white70,
           ),
         ),
       ],
