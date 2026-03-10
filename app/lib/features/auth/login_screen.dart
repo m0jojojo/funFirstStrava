@@ -41,9 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await _authService.signInWithGoogle();
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
-      );
+      // Navigation after sign-in is handled by the auth stream in main.dart.
     } catch (e) {
       if (!mounted) return;
       setState(() {
