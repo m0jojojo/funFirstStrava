@@ -1,6 +1,7 @@
 import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { FcmTokenDto } from './dto/fcm-token.dto';
+import { TerritoryColorDto } from './dto/territory-color.dto';
 import { FirebaseAuthGuard } from './firebase-auth.guard';
 import { CurrentUser } from './user.decorator';
 import { User } from './user.entity';
@@ -34,5 +35,15 @@ export class UsersController {
       username: result.user.username,
       created: result.created,
     };
+  }
+
+  @Post('territory-color')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(FirebaseAuthGuard)
+  async updateTerritoryColor(
+    @CurrentUser() user: User,
+    @Body() dto: TerritoryColorDto,
+  ): Promise<void> {
+    await this.usersService.updateTerritoryColor(user.id, dto.colorHex);
   }
 }

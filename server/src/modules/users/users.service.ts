@@ -44,4 +44,8 @@ export class UsersService implements IUsersService {
   async updateFcmToken(userId: string, fcmToken: string): Promise<void> {
     await this.userRepo.update({ id: userId }, { fcmToken });
   }
+
+  async updateTerritoryColor(userId: string, colorHex: string): Promise<void> {
+    await this.userRepo.update({ id: userId }, { territoryColor: colorHex });
+  }
 }

@@ -241,20 +241,30 @@ class _MapScreenState extends State<MapScreen> {
           FillLayer(
             id: _tilesLayerIdYours,
             sourceId: _tilesSourceIdYours,
-            fillColor: _userTerritoryColor.withOpacity(0.45).value,
+            // Use per-owner colour when available, otherwise fall back to a default.
+            fillColorExpression: [
+              'coalesce',
+              ['get', 'ownerColor'],
+              '#FF4B5C',
+            ],
             fillOpacity: 0.7,
             fillOutlineColor: _userTerritoryColor.value,
           ),
         );
-        await mapboxMap.style.addLayer(FillLayer(
-          id: _tilesLayerIdOthers,
-          sourceId: _tilesSourceIdOthers,
-          // Show all acquired tiles in the player's chosen colour,
-          // with slightly lower opacity than their own tiles.
-          fillColor: _userTerritoryColor.withOpacity(0.25).value,
-          fillOpacity: 0.5,
-          fillOutlineColor: _userTerritoryColor.withOpacity(0.8).value,
-        ));
+        await mapboxMap.style.addLayer(
+          FillLayer(
+            id: _tilesLayerIdOthers,
+            sourceId: _tilesSourceIdOthers,
+            // Same data-driven colour for other users' tiles.
+            fillColorExpression: [
+              'coalesce',
+              ['get', 'ownerColor'],
+              '#FF4B5C',
+            ],
+            fillOpacity: 0.5,
+            fillOutlineColor: _userTerritoryColor.withOpacity(0.8).value,
+          ),
+        );
         // Run path line (orange) — draws on top of tiles, updates live during run
         await mapboxMap.style.addSource(GeoJsonSource(
           id: _runPathSourceId,
@@ -388,7 +398,15 @@ class _MapScreenState extends State<MapScreen> {
           ],
         ],
       };
-      final feature = {'type': 'Feature', 'properties': {'id': tile['id']}, 'geometry': geom};
+      final ownerColor = tile['ownerColor'] ?? tile['owner_color'];
+      final feature = {
+        'type': 'Feature',
+        'properties': {
+          'id': tile['id'],
+          if (ownerColor is String && ownerColor.isNotEmpty) 'ownerColor': ownerColor,
+        },
+        'geometry': geom,
+      };
       if (ownerId == null) {
         neutralFeatures.add(feature);
       } else if (currentUserId != null && ownerId == currentUserId) {
@@ -576,12 +594,28 @@ class _MapScreenState extends State<MapScreen> {
             TextButton(
               onPressed: () async {
                 _userTerritoryColor = tempSelection;
+                final hex = '#${_userTerritoryColor.value.toRadixString(16).padLeft(8, '0')}';
                 try {
                   final prefs = await SharedPreferences.getInstance();
                   await prefs.setInt(
                     _prefsKey('territory_color_hex_v1'),
                     _userTerritoryColor.value,
                   );
+                } catch (_) {}
+                try {
+                  final user = FirebaseAuth.instance.currentUser;
+                  final token = await user?.getIdToken();
+                  if (token != null && token.isNotEmpty) {
+                    final uri = Uri.parse('$apiBaseUrl/users/territory-color');
+                    await http.post(
+                      uri,
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer $token',
+                      },
+                      body: jsonEncode({'colorHex': hex}),
+                    );
+                  }
                 } catch (_) {}
                 if (context.mounted) Navigator.of(context).pop();
               },

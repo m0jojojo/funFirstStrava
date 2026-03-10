@@ -14,6 +14,9 @@ export class User {
   @Column({ name: 'fcm_token', type: 'varchar', nullable: true })
   fcmToken: string | null;
 
+  @Column({ name: 'territory_color', type: 'varchar', length: 16, nullable: true })
+  territoryColor: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

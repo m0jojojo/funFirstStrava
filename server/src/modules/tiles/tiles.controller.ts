@@ -12,6 +12,7 @@ interface TilesNearTile {
   minLng: number;
   maxLng: number;
   ownerId: string | null;
+  ownerColor?: string | null;
 }
 
 @Controller('tiles')
@@ -44,6 +45,9 @@ export class TilesController {
       }
     }
     const tiles = await this.tilesService.findAll();
+    const ownerIds = [...new Set(tiles.map((t) => t.ownerId).filter((id): id is string => !!id))];
+    const owners = ownerIds.length ? await this.usersService.findByIds(ownerIds) : [];
+    const ownerById = new Map(owners.map((u) => [u.id, u]));
     const mapped: TilesNearTile[] = tiles.map((t) => ({
       id: t.id,
       minLat: t.minLat,
@@ -51,6 +55,7 @@ export class TilesController {
       minLng: t.minLng,
       maxLng: t.maxLng,
       ownerId: t.ownerId ?? null,
+      ownerColor: t.ownerId ? ownerById.get(t.ownerId)?.territoryColor ?? null : null,
     }));
     return { tiles: mapped, currentUserId };
   }
@@ -85,6 +90,9 @@ export class TilesController {
       const limit = limitStr != null ? parseInt(limitStr, 10) : undefined;
       tiles = await this.tilesService.findNear(lat, lng, { radiusKm, limit });
     }
+    const ownerIds = [...new Set(tiles.map((t) => t.ownerId).filter((id): id is string => !!id))];
+    const owners = ownerIds.length ? await this.usersService.findByIds(ownerIds) : [];
+    const ownerById = new Map(owners.map((u) => [u.id, u]));
     const mapped: TilesNearTile[] = tiles.map((t) => ({
       id: t.id,
       minLat: t.minLat,
@@ -92,6 +100,7 @@ export class TilesController {
       minLng: t.minLng,
       maxLng: t.maxLng,
       ownerId: t.ownerId ?? null,
+      ownerColor: t.ownerId ? ownerById.get(t.ownerId)?.territoryColor ?? null : null,
     }));
     return { tiles: mapped, currentUserId };
   }
