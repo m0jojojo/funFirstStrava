@@ -243,9 +243,12 @@ class _MapScreenState extends State<MapScreen> {
             sourceId: _tilesSourceIdYours,
             // Use per-owner colour when available, otherwise fall back to a default.
             fillColorExpression: [
-              'coalesce',
-              ['get', 'ownerColor'],
-              '#FF4B5C',
+              'to-color',
+              [
+                'coalesce',
+                ['get', 'ownerColor'],
+                '#FF4B5C',
+              ],
             ],
             fillOpacity: 0.7,
             fillOutlineColor: _userTerritoryColor.value,
@@ -257,9 +260,12 @@ class _MapScreenState extends State<MapScreen> {
             sourceId: _tilesSourceIdOthers,
             // Same data-driven colour for other users' tiles.
             fillColorExpression: [
-              'coalesce',
-              ['get', 'ownerColor'],
-              '#FF4B5C',
+              'to-color',
+              [
+                'coalesce',
+                ['get', 'ownerColor'],
+                '#FF4B5C',
+              ],
             ],
             fillOpacity: 0.5,
             fillOutlineColor: _userTerritoryColor.withOpacity(0.8).value,
@@ -594,7 +600,9 @@ class _MapScreenState extends State<MapScreen> {
             TextButton(
               onPressed: () async {
                 _userTerritoryColor = tempSelection;
-                final hex = '#${_userTerritoryColor.value.toRadixString(16).padLeft(8, '0')}';
+                // Store RGB hex (#RRGGBB) so Mapbox can parse it reliably.
+                final rgb = _userTerritoryColor.value & 0x00FFFFFF;
+                final hex = '#${rgb.toRadixString(16).padLeft(6, '0')}';
                 try {
                   final prefs = await SharedPreferences.getInstance();
                   await prefs.setInt(
