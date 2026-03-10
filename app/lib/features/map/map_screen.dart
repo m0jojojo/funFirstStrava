@@ -200,9 +200,13 @@ class _MapScreenState extends State<MapScreen> {
       }
       final first = features.first;
       Map<String, dynamic> props = const <String, dynamic>{};
-      final featureData = first.feature;
-      if (featureData is Map && featureData['properties'] is Map) {
-        props = (featureData['properties'] as Map).cast<String, dynamic>();
+      final queried = first?.queriedFeature;
+      final featureData = queried?.feature;
+      if (featureData is Map<String, Object?>) {
+        final rawProps = featureData['properties'];
+        if (rawProps is Map) {
+          props = rawProps.cast<String, dynamic>();
+        }
       }
       final ownerName = props['ownerName'] as String?;
       final ownerColor = props['ownerColor'] as String?;
