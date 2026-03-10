@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/auth_service.dart';
 import '../../services/offline_run_service.dart';
 import '../../services/push_notification_service.dart';
 import '../leaderboard/leaderboard_screen.dart';
@@ -59,28 +60,45 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          child: NavigationBar(
-            height: 68,
-            backgroundColor: Colors.transparent,
-            indicatorColor: colorScheme.primary.withOpacity(0.12),
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: _onItemTapped,
-            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.map_outlined),
-                selectedIcon: Icon(Icons.map_rounded),
-                label: 'Open map',
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              NavigationBar(
+                height: 68,
+                backgroundColor: Colors.transparent,
+                indicatorColor: colorScheme.primary.withOpacity(0.12),
+                selectedIndex: _selectedIndex,
+                onDestinationSelected: _onItemTapped,
+                labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.map_outlined),
+                    selectedIcon: Icon(Icons.map_rounded),
+                    label: 'Open map',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.directions_run_outlined),
+                    selectedIcon: Icon(Icons.directions_run_rounded),
+                    label: 'My runs',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.leaderboard_outlined),
+                    selectedIcon: Icon(Icons.leaderboard_rounded),
+                    label: 'Leaderboard',
+                  ),
+                ],
               ),
-              NavigationDestination(
-                icon: Icon(Icons.directions_run_outlined),
-                selectedIcon: Icon(Icons.directions_run_rounded),
-                label: 'My runs',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.leaderboard_outlined),
-                selectedIcon: Icon(Icons.leaderboard_rounded),
-                label: 'Leaderboard',
+              TextButton(
+                onPressed: () async {
+                  await AuthService().signOut();
+                },
+                child: Text(
+                  'Sign out',
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 14,
+                  ),
+                ),
               ),
             ],
           ),
