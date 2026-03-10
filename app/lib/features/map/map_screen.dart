@@ -180,16 +180,46 @@ class _MapScreenState extends State<MapScreen> {
     final mapboxMap = _mapboxMap;
     if (mapboxMap == null) return;
     try {
+      // Query without layerIds (passing layerIds can return empty list in some SDK versions).
       final features = await mapboxMap.queryRenderedFeatures(
         RenderedQueryGeometry(
           type: Type.SCREEN_COORDINATE,
           value: jsonEncode(context.touchPosition.encode()),
         ),
-        RenderedQueryOptions(
-          layerIds: [_tilesLayerIdYours, _tilesLayerIdOthers],
-        ),
+        RenderedQueryOptions(),
       );
-      if (features.isEmpty) {
+      // Filter to our tile layers only; prefer topmost (last in list).
+      const tileLayerIds = [
+        _tilesLayerIdNeutral,
+        _tilesLayerIdYours,
+        _tilesLayerIdOthers,
+      ];
+      QueriedRenderedFeature? tileFeature;
+      for (var i = features.length - 1; i >= 0; i--) {
+        final f = features[i];
+        final layerList = f?.layers;
+        final isTileLayer = layerList != null &&
+            tileLayerIds.any((id) => layerList.contains(id));
+        if (isTileLayer) {
+          tileFeature = f;
+          break;
+        }
+      }
+      // Fallback: if layers filter didn't match, use first feature with our tile props (id).
+      if (tileFeature == null) {
+        for (final f in features) {
+          final q = f?.queriedFeature;
+          final fd = q?.feature;
+          if (fd is Map<String, Object?>) {
+            final rawProps = fd['properties'];
+            if (rawProps is Map && rawProps.containsKey('id')) {
+              tileFeature = f;
+              break;
+            }
+          }
+        }
+      }
+      if (tileFeature == null) {
         if (mounted) {
           setState(() {
             _selectedTileOwnerName = null;
@@ -198,10 +228,9 @@ class _MapScreenState extends State<MapScreen> {
         }
         return;
       }
-      final first = features.first;
       Map<String, dynamic> props = const <String, dynamic>{};
-      final queried = first?.queriedFeature;
-      final featureData = queried?.feature;
+      final queried = tileFeature.queriedFeature;
+      final featureData = queried.feature;
       if (featureData is Map<String, Object?>) {
         final rawProps = featureData['properties'];
         if (rawProps is Map) {
@@ -212,11 +241,13 @@ class _MapScreenState extends State<MapScreen> {
       final ownerColor = props['ownerColor'] as String?;
       if (mounted) {
         setState(() {
-          _selectedTileOwnerName = ownerName;
+          _selectedTileOwnerName = ownerName ?? 'Unclaimed';
           _selectedTileOwnerColorHex = ownerColor;
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      if (kDebugMode) debugPrint('[Map tap] $e');
+    }
   }
 
   /// Show user location as blue dot with pulsing glow (like Google Maps).
