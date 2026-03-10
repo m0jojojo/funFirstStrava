@@ -176,14 +176,14 @@ class _MapScreenState extends State<MapScreen> {
     _loadTilesAndAddLayer();
   }
 
-  Future<void> _onMapTap(ScreenCoordinate point) async {
+  void _onMapTap(MapContentGestureContext context) async {
     final mapboxMap = _mapboxMap;
     if (mapboxMap == null) return;
     try {
       final features = await mapboxMap.queryRenderedFeatures(
         RenderedQueryGeometry(
           type: Type.SCREEN_COORDINATE,
-          value: jsonEncode(point.encode()),
+          value: jsonEncode(context.touchPosition.encode()),
         ),
         RenderedQueryOptions(
           layerIds: [_tilesLayerIdYours, _tilesLayerIdOthers],
@@ -198,9 +198,12 @@ class _MapScreenState extends State<MapScreen> {
         }
         return;
       }
-      final props = features.first.encodedProperties != null
-          ? jsonDecode(features.first.encodedProperties!) as Map<String, dynamic>
-          : <String, dynamic>{};
+      final first = features.first;
+      Map<String, dynamic> props = const <String, dynamic>{};
+      final featureData = first.feature;
+      if (featureData is Map && featureData['properties'] is Map) {
+        props = (featureData['properties'] as Map).cast<String, dynamic>();
+      }
       final ownerName = props['ownerName'] as String?;
       final ownerColor = props['ownerColor'] as String?;
       if (mounted) {
