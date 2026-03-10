@@ -13,6 +13,7 @@ interface TilesNearTile {
   maxLng: number;
   ownerId: string | null;
   ownerColor?: string | null;
+  ownerName?: string | null;
 }
 
 @Controller('tiles')
@@ -48,15 +49,19 @@ export class TilesController {
     const ownerIds = [...new Set(tiles.map((t) => t.ownerId).filter((id): id is string => !!id))];
     const owners = ownerIds.length ? await this.usersService.findByIds(ownerIds) : [];
     const ownerById = new Map(owners.map((u) => [u.id, u]));
-    const mapped: TilesNearTile[] = tiles.map((t) => ({
-      id: t.id,
-      minLat: t.minLat,
-      maxLat: t.maxLat,
-      minLng: t.minLng,
-      maxLng: t.maxLng,
-      ownerId: t.ownerId ?? null,
-      ownerColor: t.ownerId ? ownerById.get(t.ownerId)?.territoryColor ?? null : null,
-    }));
+    const mapped: TilesNearTile[] = tiles.map((t) => {
+      const owner = t.ownerId ? ownerById.get(t.ownerId) : undefined;
+      return {
+        id: t.id,
+        minLat: t.minLat,
+        maxLat: t.maxLat,
+        minLng: t.minLng,
+        maxLng: t.maxLng,
+        ownerId: t.ownerId ?? null,
+        ownerColor: owner?.territoryColor ?? null,
+        ownerName: owner?.username ?? null,
+      };
+    });
     return { tiles: mapped, currentUserId };
   }
 
@@ -93,15 +98,19 @@ export class TilesController {
     const ownerIds = [...new Set(tiles.map((t) => t.ownerId).filter((id): id is string => !!id))];
     const owners = ownerIds.length ? await this.usersService.findByIds(ownerIds) : [];
     const ownerById = new Map(owners.map((u) => [u.id, u]));
-    const mapped: TilesNearTile[] = tiles.map((t) => ({
-      id: t.id,
-      minLat: t.minLat,
-      maxLat: t.maxLat,
-      minLng: t.minLng,
-      maxLng: t.maxLng,
-      ownerId: t.ownerId ?? null,
-      ownerColor: t.ownerId ? ownerById.get(t.ownerId)?.territoryColor ?? null : null,
-    }));
+    const mapped: TilesNearTile[] = tiles.map((t) => {
+      const owner = t.ownerId ? ownerById.get(t.ownerId) : undefined;
+      return {
+        id: t.id,
+        minLat: t.minLat,
+        maxLat: t.maxLat,
+        minLng: t.minLng,
+        maxLng: t.maxLng,
+        ownerId: t.ownerId ?? null,
+        ownerColor: owner?.territoryColor ?? null,
+        ownerName: owner?.username ?? null,
+      };
+    });
     return { tiles: mapped, currentUserId };
   }
 

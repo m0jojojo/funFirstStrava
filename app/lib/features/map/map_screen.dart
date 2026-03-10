@@ -44,6 +44,9 @@ class _MapScreenState extends State<MapScreen> {
   bool _batteryDialogShown = false;
   bool _territoryOnboardingShown = false;
 
+  String? _selectedTileOwnerName;
+  String? _selectedTileOwnerColorHex;
+
   /// Fallback center: Sector 40 Gurgaon (when location unavailable). Position is (lng, lat).
   static const double _defaultLng = 77.054319;
   static const double _defaultLat = 28.449841;
@@ -171,6 +174,42 @@ class _MapScreenState extends State<MapScreen> {
   void _onStyleLoaded(StyleLoadedEventData eventData) {
     _enableUserLocationPuck();
     _loadTilesAndAddLayer();
+  }
+
+  Future<void> _onMapTap(ScreenCoordinate point) async {
+    final mapboxMap = _mapboxMap;
+    if (mapboxMap == null) return;
+    try {
+      final features = await mapboxMap.queryRenderedFeatures(
+        RenderedQueryGeometry(
+          type: Type.SCREEN_COORDINATE,
+          value: jsonEncode(point.encode()),
+        ),
+        RenderedQueryOptions(
+          layerIds: [_tilesLayerIdYours, _tilesLayerIdOthers],
+        ),
+      );
+      if (features.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _selectedTileOwnerName = null;
+            _selectedTileOwnerColorHex = null;
+          });
+        }
+        return;
+      }
+      final props = features.first.encodedProperties != null
+          ? jsonDecode(features.first.encodedProperties!) as Map<String, dynamic>
+          : <String, dynamic>{};
+      final ownerName = props['ownerName'] as String?;
+      final ownerColor = props['ownerColor'] as String?;
+      if (mounted) {
+        setState(() {
+          _selectedTileOwnerName = ownerName;
+          _selectedTileOwnerColorHex = ownerColor;
+        });
+      }
+    } catch (_) {}
   }
 
   /// Show user location as blue dot with pulsing glow (like Google Maps).
@@ -405,11 +444,13 @@ class _MapScreenState extends State<MapScreen> {
         ],
       };
       final ownerColor = tile['ownerColor'] ?? tile['owner_color'];
+      final ownerName = tile['ownerName'] ?? tile['owner_name'];
       final feature = {
         'type': 'Feature',
         'properties': {
           'id': tile['id'],
           if (ownerColor is String && ownerColor.isNotEmpty) 'ownerColor': ownerColor,
+          if (ownerName is String && ownerName.isNotEmpty) 'ownerName': ownerName,
         },
         'geometry': geom,
       };
@@ -740,6 +781,7 @@ class _MapScreenState extends State<MapScreen> {
               onMapCreated: _onMapCreated,
               onStyleLoadedListener: _onStyleLoaded,
               onMapIdleListener: _onMapIdle,
+              onTapListener: _onMapTap,
             ),
             // Top-right: open My runs from map screen.
             Positioned(
@@ -817,6 +859,16 @@ class _MapScreenState extends State<MapScreen> {
               bottom: _mapBottomBarHeight + 12,
               child: _MapMetricsBar(tracker: tracker),
             ),
+            if (_selectedTileOwnerName != null)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: _mapBottomBarHeight + 120,
+                child: _TileOwnerBanner(
+                  ownerName: _selectedTileOwnerName!,
+                  ownerColorHex: _selectedTileOwnerColorHex,
+                ),
+              ),
             // Bottom control bar: activity type, Start/Pause/Resume, Finish
             Positioned(
               left: 0,
@@ -920,6 +972,83 @@ class _MetricItem extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _TileOwnerBanner extends StatelessWidget {
+  const _TileOwnerBanner({
+    required this.ownerName,
+    this.ownerColorHex,
+  });
+
+  final String ownerName;
+  final String? ownerColorHex;
+
+  @override
+  Widget build(BuildContext context) {
+    Color accent = const Color(0xFFFFC107);
+    if (ownerColorHex != null && ownerColorHex!.startsWith('#')) {
+      try {
+        final hex = ownerColorHex!.substring(1);
+        final value = int.parse(hex, radix: 16);
+        // Assume RGB
+        accent = Color(0xFF000000 | value);
+      } catch (_) {}
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Material(
+        color: const Color(0xFF101218).withOpacity(0.96),
+        borderRadius: BorderRadius.circular(18),
+        elevation: 10,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: accent.withOpacity(0.15),
+                ),
+                child: Icon(
+                  Icons.person_rounded,
+                  color: accent,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      ownerName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Current owner of this area',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
