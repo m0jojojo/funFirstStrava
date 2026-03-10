@@ -74,16 +74,23 @@ class _MapScreenState extends State<MapScreen> {
     RunTracker.instance.addListener(_onRunTrackerChanged);
   }
 
+  String _prefsKey(String base) {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null || userId.isEmpty) return base;
+    return '${base}_$userId';
+    }
+
   Future<void> _initClientState() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final colorHex = prefs.getInt('territory_color_hex_v1');
+      final colorHex = prefs.getInt(_prefsKey('territory_color_hex_v1'));
       if (colorHex != null) {
         _userTerritoryColor = Color(colorHex);
       }
-      _batteryDialogShown = prefs.getBool('battery_opt_shown_v1') ?? false;
+      _batteryDialogShown =
+          prefs.getBool(_prefsKey('battery_opt_shown_v1')) ?? false;
       _territoryOnboardingShown =
-          prefs.getBool('territory_onboarding_shown_v1') ?? false;
+          prefs.getBool(_prefsKey('territory_onboarding_shown_v1')) ?? false;
       if (mounted) setState(() {});
     } catch (_) {}
   }
@@ -464,7 +471,7 @@ class _MapScreenState extends State<MapScreen> {
     _territoryOnboardingShown = true;
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('territory_onboarding_shown_v1', true);
+      await prefs.setBool(_prefsKey('territory_onboarding_shown_v1'), true);
     } catch (_) {}
 
     await showDialog<void>(
@@ -570,7 +577,9 @@ class _MapScreenState extends State<MapScreen> {
                 try {
                   final prefs = await SharedPreferences.getInstance();
                   await prefs.setInt(
-                      'territory_color_hex_v1', _userTerritoryColor.value);
+                    _prefsKey('territory_color_hex_v1'),
+                    _userTerritoryColor.value,
+                  );
                 } catch (_) {}
                 if (context.mounted) Navigator.of(context).pop();
               },
