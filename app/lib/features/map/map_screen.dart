@@ -47,6 +47,9 @@ class _MapScreenState extends State<MapScreen> {
   String? _selectedTileOwnerName;
   String? _selectedTileOwnerColorHex;
 
+  /// Cached tile list (from API) for tap-by-coordinate fallback.
+  List<Map<String, dynamic>> _cachedTiles = const [];
+
   /// Fallback center: Sector 40 Gurgaon (when location unavailable). Position is (lng, lat).
   static const double _defaultLng = 77.054319;
   static const double _defaultLat = 28.449841;
@@ -176,75 +179,40 @@ class _MapScreenState extends State<MapScreen> {
     _loadTilesAndAddLayer();
   }
 
-  void _onMapTap(MapContentGestureContext context) async {
-    final mapboxMap = _mapboxMap;
-    if (mapboxMap == null) return;
+  void _onMapTap(MapContentGestureContext context) {
+    if (!mounted) return;
     try {
-      // Query without layerIds (passing layerIds can return empty list in some SDK versions).
-      final features = await mapboxMap.queryRenderedFeatures(
-        RenderedQueryGeometry(
-          type: Type.SCREEN_COORDINATE,
-          value: jsonEncode(context.touchPosition.encode()),
-        ),
-        RenderedQueryOptions(),
-      );
-      // Filter to our tile layers only; prefer topmost (last in list).
-      const tileLayerIds = [
-        _tilesLayerIdNeutral,
-        _tilesLayerIdYours,
-        _tilesLayerIdOthers,
-      ];
-      QueriedRenderedFeature? tileFeature;
-      for (var i = features.length - 1; i >= 0; i--) {
-        final f = features[i];
-        final layerList = f?.layers;
-        final isTileLayer = layerList != null &&
-            tileLayerIds.any((id) => layerList.contains(id));
-        if (isTileLayer) {
-          tileFeature = f;
+      // Use geographic coordinate: find which cached tile contains this point.
+      final coords = context.point.coordinates;
+      final lat = (coords.lat as num).toDouble();
+      final lng = (coords.lng as num).toDouble();
+      Map<String, dynamic>? hitTile;
+      for (final t in _cachedTiles) {
+        final minLat = _num(t['minLat'] ?? t['min_lat']);
+        final maxLat = _num(t['maxLat'] ?? t['max_lat']);
+        final minLng = _num(t['minLng'] ?? t['min_lng']);
+        final maxLng = _num(t['maxLng'] ?? t['max_lng']);
+        if (minLat != null && maxLat != null && minLng != null && maxLng != null &&
+            lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng) {
+          hitTile = Map<String, dynamic>.from(t);
           break;
         }
       }
-      // Fallback: if layers filter didn't match, use first feature with our tile props (id).
-      if (tileFeature == null) {
-        for (final f in features) {
-          final q = f?.queriedFeature;
-          final fd = q?.feature;
-          if (fd is Map<String, Object?>) {
-            final rawProps = fd['properties'];
-            if (rawProps is Map && rawProps.containsKey('id')) {
-              tileFeature = f;
-              break;
-            }
-          }
-        }
-      }
-      if (tileFeature == null) {
-        if (mounted) {
-          setState(() {
-            _selectedTileOwnerName = null;
-            _selectedTileOwnerColorHex = null;
-          });
-        }
+      if (hitTile == null) {
+        setState(() {
+          _selectedTileOwnerName = null;
+          _selectedTileOwnerColorHex = null;
+        });
         return;
       }
-      Map<String, dynamic> props = const <String, dynamic>{};
-      final queried = tileFeature.queriedFeature;
-      final featureData = queried.feature;
-      if (featureData is Map<String, Object?>) {
-        final rawProps = featureData['properties'];
-        if (rawProps is Map) {
-          props = rawProps.cast<String, dynamic>();
-        }
-      }
-      final ownerName = props['ownerName'] as String?;
-      final ownerColor = props['ownerColor'] as String?;
-      if (mounted) {
-        setState(() {
-          _selectedTileOwnerName = ownerName ?? 'Unclaimed';
-          _selectedTileOwnerColorHex = ownerColor;
-        });
-      }
+      final ownerName = hitTile['ownerName'] ?? hitTile['owner_name'];
+      final ownerColor = hitTile['ownerColor'] ?? hitTile['owner_color'];
+      setState(() {
+        _selectedTileOwnerName = (ownerName is String && ownerName.isNotEmpty)
+            ? ownerName
+            : 'Unclaimed';
+        _selectedTileOwnerColorHex = ownerColor is String ? ownerColor : null;
+      });
     } catch (e) {
       if (kDebugMode) debugPrint('[Map tap] $e');
     }
@@ -292,9 +260,13 @@ class _MapScreenState extends State<MapScreen> {
 
       if (list == null || list.isEmpty) {
         if (kDebugMode) debugPrint('[Tiles] Load: no tiles (check API_BASE_URL=$apiBaseUrl and backend)');
-        if (mounted) setState(() => _tilesError = 'No tiles in this area');
-      } else if (kDebugMode) {
-        debugPrint('[Tiles] Load: ${list.length} tiles → neutral/yours/others');
+        if (mounted) setState(() {
+          _tilesError = 'No tiles in this area';
+          _cachedTiles = [];
+        });
+      } else {
+        if (kDebugMode) debugPrint('[Tiles] Load: ${list.length} tiles → neutral/yours/others');
+        if (mounted) setState(() => _cachedTiles = list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
       }
 
       try {
@@ -395,6 +367,7 @@ class _MapScreenState extends State<MapScreen> {
       if (result.tiles == null || !mounted) return;
       // Don't overwrite with empty when camera moved outside play area (e.g. flyTo to user location).
       if (result.tiles!.isEmpty) return;
+      if (mounted) setState(() => _cachedTiles = result.tiles!.map((e) => Map<String, dynamic>.from(e as Map)).toList());
       final three = _tilesToGeoJsonThree(result.tiles!, result.currentUserId);
       final neutralSrc = await mapboxMap.style.getSource(_tilesSourceIdNeutral);
       final yoursSrc = await mapboxMap.style.getSource(_tilesSourceIdYours);
