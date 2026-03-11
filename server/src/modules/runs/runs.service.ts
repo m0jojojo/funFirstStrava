@@ -60,16 +60,31 @@ export class RunsService {
       endedAt,
       path,
     });
-    const tilesCaptured = await this.tilesService.captureTilesByPath(user.id, path);
+    const { captured: tilesCaptured, lostByUser } =
+      await this.tilesService.captureTilesByPath(user.id, path);
     run.tilesCaptured = tilesCaptured;
     const saved = await this.runRepo.save(run);
 
     // Phase 7: update leaderboard and notify if rank changed (global scope for now).
-    await this.leaderboardService.updateScoreAndNotify(
-      user.id,
-      tilesCaptured,
-      { type: 'global' },
-    );
+    await this.leaderboardService.updateScoreAndNotify(user.id, tilesCaptured, {
+      type: 'global',
+    });
+
+    // For any previous owners who lost tiles in this run, decrement their
+    // leaderboard score so the total reflects current territory, not just
+    // lifetime gains.
+    const lostEntries = Object.entries(lostByUser ?? {});
+    if (lostEntries.length > 0) {
+      await Promise.all(
+        lostEntries.map(([loserId, lostCount]) =>
+          this.leaderboardService.updateScore(
+            loserId,
+            -Math.abs(Number(lostCount) || 0),
+            { type: 'global' },
+          ),
+        ),
+      );
+    }
 
     return saved;
   }

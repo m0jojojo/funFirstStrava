@@ -99,11 +99,15 @@ export class TilesService implements OnModuleInit {
   async captureTilesByPath(
     userId: string,
     path: Array<{ lat: number; lng: number }>,
-  ): Promise<number> {
-    if (path.length === 0) return 0;
+  ): Promise<{ captured: number; lostByUser: Record<string, number> }> {
+    if (path.length === 0) {
+      return { captured: 0, lostByUser: {} };
+    }
     const visitedKeys = new Set<string>();
     const tilesToSave: Tile[] = [];
     const previousOwnerByTile = new Map<string, string>();
+    const lostCountByUser = new Map<string, number>();
+    let capturedCount = 0;
 
     for (const point of path) {
       if (typeof point.lat !== 'number' || typeof point.lng !== 'number') continue;
@@ -125,19 +129,31 @@ export class TilesService implements OnModuleInit {
         });
       }
 
+      // Already owned by this user: keep ownership but do not count as a new capture.
+      if (tile.ownerId === userId) {
+        tilesToSave.push(tile);
+        continue;
+      }
+
       if (tile.ownerId && tile.ownerId !== userId) {
         previousOwnerByTile.set(tile.id, tile.ownerId);
+        const prev = tile.ownerId;
+        lostCountByUser.set(prev, (lostCountByUser.get(prev) ?? 0) + 1);
       }
 
       tile.ownerId = userId;
+      capturedCount += 1;
       tilesToSave.push(tile);
     }
 
-    if (tilesToSave.length === 0) return 0;
+    if (tilesToSave.length === 0) {
+      return { captured: 0, lostByUser: {} };
+    }
 
     const saved = await this.tilesRepository.save(tilesToSave);
     const uniqueIds = new Set(saved.map((t) => t.id));
-    const count = uniqueIds.size;
+    // capturedCount is the number of tiles newly (or newly taken) owned by this user.
+    const count = capturedCount;
 
     this.tilesGateway.broadcastTilesUpdated(userId, count);
 
@@ -145,7 +161,11 @@ export class TilesService implements OnModuleInit {
     if (previousOwnerIds.length > 0) {
       await this.notifyPreviousOwners(previousOwnerIds, userId);
     }
-    return count;
+
+    return {
+      captured: count,
+      lostByUser: Object.fromEntries(lostCountByUser),
+    };
   }
 
   private async notifyPreviousOwners(previousOwnerIds: string[], attackerId: string): Promise<void> {

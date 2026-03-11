@@ -13,10 +13,13 @@ describe('RunsService + Leaderboard integration (Phase 5)', () => {
     find: jest.fn(),
   };
   const mockTilesService = {
-    captureTilesByPath: jest.fn().mockResolvedValue(3),
+    captureTilesByPath: jest
+      .fn()
+      .mockResolvedValue({ captured: 3, lostByUser: {} }),
   };
   const mockLeaderboardService = {
     updateScoreAndNotify: jest.fn().mockResolvedValue(undefined),
+    updateScore: jest.fn().mockResolvedValue(undefined),
   };
 
   beforeEach(async () => {
@@ -52,6 +55,7 @@ describe('RunsService + Leaderboard integration (Phase 5)', () => {
       3,
       { type: 'global' },
     );
+    expect(mockLeaderboardService.updateScore).not.toHaveBeenCalled();
   });
 });
 
