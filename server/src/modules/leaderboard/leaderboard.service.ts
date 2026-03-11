@@ -195,7 +195,6 @@ export class LeaderboardService {
 
     const result = await this.updateScoreAndDetectRank(userId, amount, scope);
     this.lastUpdateAtMs.set(userId, now);
-    if (!result.changed) return;
     this.gateway.broadcastRankChange({
       userId,
       scope,

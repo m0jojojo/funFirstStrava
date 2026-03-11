@@ -156,7 +156,7 @@ describe('LeaderboardService', () => {
     expect(result.newScore).toBe(30);
   });
 
-  it('updateScoreAndNotify should emit event only when rank changes', async () => {
+  it('updateScoreAndNotify should emit event whenever score updates (subject to throttle)', async () => {
     const scope: LeaderboardScope = { type: 'global' };
 
     // Mock underlying rank detection to signal change.
@@ -172,6 +172,9 @@ describe('LeaderboardService', () => {
         changed: true,
       });
 
+    const nowSpy = jest.spyOn(Date, 'now');
+    nowSpy.mockReturnValueOnce(0);
+
     await service.updateScoreAndNotify('user-5', 10, scope);
 
     expect(spy).toHaveBeenCalledWith('user-5', 10, scope);
@@ -182,7 +185,7 @@ describe('LeaderboardService', () => {
       score: 15,
     });
 
-    // Now simulate no rank change.
+    // Now simulate no rank change but score increase: still emit.
     mockGateway.broadcastRankChange.mockClear();
     spy.mockResolvedValueOnce({
       scope,
@@ -194,9 +197,17 @@ describe('LeaderboardService', () => {
       changed: false,
     });
 
+    nowSpy.mockReturnValueOnce(11_000);
+
     await service.updateScoreAndNotify('user-5', 5, scope);
 
-    expect(mockGateway.broadcastRankChange).not.toHaveBeenCalled();
+    expect(mockGateway.broadcastRankChange).toHaveBeenCalledWith({
+      userId: 'user-5',
+      scope,
+      newRank: 2,
+      score: 20,
+    });
+    nowSpy.mockRestore();
   });
 
   it('updateScoreAndNotify should throttle repeated calls within window', async () => {
