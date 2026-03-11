@@ -27,29 +27,36 @@ class LeaderboardRow extends StatelessWidget {
                 : colorScheme.primary;
 
     final backgroundColor = entry.isCurrentUser
-        ? colorScheme.primary.withOpacity(0.18)
+        ? const Color(0xFF202537)
         : const Color(0xFF181A22);
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
         color: backgroundColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            rankColor.withOpacity(isTopThree ? 0.35 : 0.14),
+            backgroundColor,
+          ],
+        ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
           Container(
             width: 40,
-            height: 40,
+            height: 52,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: rankColor.withOpacity(isTopThree ? 0.2 : 0.08),
-              borderRadius: BorderRadius.circular(12),
+              color: Colors.black.withOpacity(0.25),
+              borderRadius: BorderRadius.circular(14),
             ),
             child: Text(
               '$rank',
-              style: theme.textTheme.titleMedium?.copyWith(
+              style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w800,
                 color: rankColor,
               ),
@@ -57,18 +64,32 @@ class LeaderboardRow extends StatelessWidget {
           ),
           const SizedBox(width: 16),
           Expanded(
-            child: Text(
-              entry.username,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  entry.username,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  entry.isCurrentUser ? 'You' : 'Live tiles captured',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 12),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: const Color(0xFF262938),
               borderRadius: BorderRadius.circular(999),
@@ -78,7 +99,7 @@ class LeaderboardRow extends StatelessWidget {
               children: [
                 const Icon(
                   Icons.bolt_rounded,
-                  size: 16,
+                  size: 18,
                   color: Colors.amber,
                 ),
                 const SizedBox(width: 6),
