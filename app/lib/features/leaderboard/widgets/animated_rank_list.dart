@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:implicitly_animated_reorderable_list_2/implicitly_animated_reorderable_list_2.dart';
 
 import '../leaderboard_state.dart';
 import 'leaderboard_row.dart';
 
-/// Displays the leaderboard entries.
+/// Displays the leaderboard entries with smooth position changes.
 ///
-/// Phase 1: simple, non-animated [ListView]. In later phases this
-/// will be replaced with an animated list that smoothly reorders rows.
+/// Uses [ImplicitlyAnimatedList] so that when the order of [entries]
+/// changes, only the affected rows animate into their new positions.
 class AnimatedRankList extends StatelessWidget {
   const AnimatedRankList({
     super.key,
@@ -17,14 +18,21 @@ class AnimatedRankList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
+    final visibleEntries =
+        entries.length > 50 ? entries.sublist(0, 50) : entries;
+
+    return ImplicitlyAnimatedList<LeaderboardEntryView>(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      itemCount: entries.length.clamp(0, 50),
-      itemBuilder: (context, index) {
-        final entry = entries[index];
-        return LeaderboardRow(
-          key: ValueKey(entry.userId),
-          entry: entry,
+      items: visibleEntries,
+      areItemsTheSame: (a, b) => a.userId == b.userId,
+      itemBuilder: (context, animation, item, index) {
+        return SizeFadeTransition(
+          animation: animation,
+          curve: Curves.easeInOut,
+          child: LeaderboardRow(
+            key: ValueKey(item.userId),
+            entry: item,
+          ),
         );
       },
     );
