@@ -26,12 +26,15 @@ class AnimatedRankList extends StatelessWidget {
       items: visibleEntries,
       areItemsTheSame: (a, b) => a.userId == b.userId,
       itemBuilder: (context, animation, item, index) {
-        return SizeFadeTransition(
-          animation: animation,
-          curve: Curves.easeInOut,
-          child: LeaderboardRow(
-            key: ValueKey(item.userId),
-            entry: item,
+        return SizeTransition(
+          sizeFactor: animation,
+          axisAlignment: 0.0,
+          child: FadeTransition(
+            opacity: animation,
+            child: LeaderboardRow(
+              key: ValueKey(item.userId),
+              entry: item,
+            ),
           ),
         );
       },

@@ -1,16 +1,20 @@
-import 'package:flutter/foundation.dart';
+import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+
+import '../../core/api_config.dart';
 import 'leaderboard_state.dart';
 
-/// Simple controller for the leaderboard screen.
+/// Controller for the leaderboard screen.
 ///
-/// In later phases this will:
-/// - Load initial data from the backend
-/// - Subscribe to WebSocket updates
-/// - Drive animated reordering and score updates
+/// Responsibilities:
+/// - Load initial leaderboard data from the backend
+/// - (Later) subscribe to WebSocket updates
+/// - (Later) drive animated reordering and score updates
 class LeaderboardController extends ChangeNotifier {
   LeaderboardController() {
-    _bootstrapWithMockData();
+    _loadInitial();
   }
 
   LeaderboardViewState _state = const LeaderboardViewState(isLoading: true);
@@ -22,25 +26,74 @@ class LeaderboardController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _bootstrapWithMockData() {
-    // For Phase 1 we just show a static, fake leaderboard so we can iterate on layout.
-    final demoEntries = List<LeaderboardEntryView>.generate(10, (index) {
-      final rank = index + 1;
-      return LeaderboardEntryView(
-        rank: rank,
-        userId: 'demo-$rank',
-        username: 'Runner $rank',
-        score: 74200 - index * 50,
-        isCurrentUser: rank == 4,
-      );
-    });
-
+  Future<void> _loadInitial() async {
     _setState(
-      LeaderboardViewState(
-        isLoading: false,
-        entries: demoEntries,
+      _state.copyWith(
+        isLoading: true,
+        errorMessage: null,
       ),
     );
+
+    try {
+      final uri = Uri.parse('$apiBaseUrl/leaderboards/global?limit=50');
+      final response = await http.get(uri);
+
+      if (response.statusCode != 200) {
+        _setState(
+          _state.copyWith(
+            isLoading: false,
+            errorMessage: 'Failed to load leaderboard (${response.statusCode})',
+          ),
+        );
+        return;
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! List) {
+        _setState(
+          _state.copyWith(
+            isLoading: false,
+            errorMessage: 'Unexpected leaderboard response',
+          ),
+        );
+        return;
+      }
+
+      final entries = <LeaderboardEntryView>[];
+      for (var i = 0; i < decoded.length; i++) {
+        final raw = decoded[i];
+        if (raw is! Map) continue;
+
+        final map = raw.cast<String, dynamic>();
+        final userId = map['userId']?.toString() ?? '';
+        final username = map['username']?.toString();
+        final scoreValue = map['score'];
+        final score = scoreValue is num ? scoreValue.toInt() : 0;
+
+        entries.add(
+          LeaderboardEntryView(
+            rank: i + 1,
+            userId: userId,
+            username: username?.isNotEmpty == true ? username! : 'Runner ${i + 1}',
+            score: score,
+          ),
+        );
+      }
+
+      _setState(
+        LeaderboardViewState(
+          isLoading: false,
+          entries: entries,
+        ),
+      );
+    } catch (e) {
+      _setState(
+        _state.copyWith(
+          isLoading: false,
+          errorMessage: 'Failed to load leaderboard',
+        ),
+      );
+    }
   }
 }
 
