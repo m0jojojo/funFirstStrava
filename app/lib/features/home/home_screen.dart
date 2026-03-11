@@ -4,6 +4,7 @@ import '../../services/auth_service.dart';
 import '../../services/offline_run_service.dart';
 import '../../services/push_notification_service.dart';
 import '../leaderboard/leaderboard_screen.dart';
+import '../leaderboard/leaderboard_controller.dart';
 import '../map/map_screen.dart';
 import '../runs/runs_list_screen.dart';
 
@@ -28,6 +29,10 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _selectedIndex = index;
     });
+    if (index == 2) {
+      // Ensure leaderboard snapshot is up to date whenever the tab is shown.
+      LeaderboardController.refreshAll();
+    }
   }
 
   @override

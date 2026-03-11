@@ -15,9 +15,12 @@ import 'leaderboard_state.dart';
 /// - Drive animated reordering and score updates
 class LeaderboardController extends ChangeNotifier {
   LeaderboardController() {
+    _instances.add(this);
     _loadInitial();
     _connectSocket();
   }
+
+  static final Set<LeaderboardController> _instances = <LeaderboardController>{};
 
   LeaderboardViewState _state = const LeaderboardViewState(isLoading: true);
   io.Socket? _socket;
@@ -32,7 +35,16 @@ class LeaderboardController extends ChangeNotifier {
   @override
   void dispose() {
     _socket?.dispose();
+    _instances.remove(this);
     super.dispose();
+  }
+
+  /// Trigger a fresh HTTP fetch of the global leaderboard.
+  Future<void> refresh() => _loadInitial();
+
+  /// Convenience to refresh any existing leaderboard controllers.
+  static Future<void> refreshAll() async {
+    await Future.wait(_instances.map((c) => c.refresh()));
   }
 
   Future<void> _loadInitial() async {
