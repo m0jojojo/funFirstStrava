@@ -77,5 +77,23 @@ export class LeaderboardService {
       score: typeof e.score === 'number' ? e.score : Number(e.score),
     }));
   }
+
+  /**
+   * Generic entry point for other modules (runs/tiles) to apply a score delta
+   * across one or more scopes. Later phases will add rank-change detection
+   * and throttling on top of this method.
+   */
+  async updateScore(
+    userId: string,
+    amount: number,
+    scopes: LeaderboardScope | LeaderboardScope[],
+  ): Promise<void> {
+    const scoped = Array.isArray(scopes) ? scopes : [scopes];
+    const safeAmount = Number(amount) || 0;
+    if (!userId || safeAmount === 0 || scoped.length === 0) return;
+    await Promise.all(
+      scoped.map((s) => this.incrementScore(userId, safeAmount, s)),
+    );
+  }
 }
 

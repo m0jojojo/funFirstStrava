@@ -5,9 +5,10 @@ import { RunsController } from './runs.controller';
 import { RunsService } from './runs.service';
 import { TilesModule } from '../tiles/tiles.module';
 import { UsersModule } from '../users/users.module';
+import { LeaderboardModule } from '../leaderboard/leaderboard.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Run]), UsersModule, TilesModule],
+  imports: [TypeOrmModule.forFeature([Run]), UsersModule, TilesModule, LeaderboardModule],
   controllers: [RunsController],
   providers: [RunsService],
   exports: [RunsService],

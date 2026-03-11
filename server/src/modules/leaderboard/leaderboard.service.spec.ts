@@ -84,6 +84,25 @@ describe('LeaderboardService', () => {
       { userId: 'u2', score: 150 },
     ]);
   });
+
+  it('updateScore should call increment for each provided scope', async () => {
+    const scopeGlobal: LeaderboardScope = { type: 'global' };
+    const scopeCountry: LeaderboardScope = { type: 'country', countryCode: 'us' };
+    mockRedis.zIncrBy.mockResolvedValue(10);
+
+    await service.updateScore('user-3', 5, [scopeGlobal, scopeCountry]);
+
+    expect(mockRedis.zIncrBy).toHaveBeenCalledWith(
+      'leaderboard:global',
+      5,
+      'user-3',
+    );
+    expect(mockRedis.zIncrBy).toHaveBeenCalledWith(
+      'leaderboard:country:US',
+      5,
+      'user-3',
+    );
+  });
 });
 
 

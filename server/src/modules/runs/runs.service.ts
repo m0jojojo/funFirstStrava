@@ -5,6 +5,7 @@ import { PathPoint } from './run.entity';
 import { Run } from './run.entity';
 import { TilesService } from '../tiles/tiles.service';
 import { User } from '../users/user.entity';
+import { LeaderboardService } from '../leaderboard/leaderboard.service';
 
 /** Max allowed speed between consecutive path points (m/s). ~54 km/h; rejects driving/teleport. */
 const MAX_SPEED_MS = 15;
@@ -17,6 +18,7 @@ export class RunsService {
     @InjectRepository(Run)
     private readonly runRepo: Repository<Run>,
     private readonly tilesService: TilesService,
+    private readonly leaderboardService: LeaderboardService,
   ) {}
 
   private readonly logger = new Logger(RunsService.name);
@@ -61,6 +63,10 @@ export class RunsService {
     const tilesCaptured = await this.tilesService.captureTilesByPath(user.id, path);
     run.tilesCaptured = tilesCaptured;
     const saved = await this.runRepo.save(run);
+
+    // Phase 5: basic score update. For now, use tilesCaptured on global leaderboard.
+    await this.leaderboardService.updateScore(user.id, tilesCaptured, { type: 'global' });
+
     return saved;
   }
 
