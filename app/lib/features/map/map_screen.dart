@@ -78,6 +78,7 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     _initClientState();
     _resolveInitialCenter();
+    _connectTilesSocket();
     RunTracker.instance.addListener(_onRunTrackerChanged);
   }
 
@@ -114,6 +115,26 @@ class _MapScreenState extends State<MapScreen> {
     }
     _updateRunPathOnMap();
     if (mounted) setState(() {});
+  }
+
+  void _connectTilesSocket() {
+    try {
+      final socket = io.io(
+        apiBaseUrl,
+        <String, dynamic>{
+          'transports': ['websocket'],
+          'autoConnect': true,
+        },
+      );
+      _tilesSocket = socket;
+
+      socket.on('tiles_updated', (dynamic _) async {
+        if (!mounted) return;
+        await _refreshTilesData();
+      });
+    } catch (_) {
+      // If socket connection fails, map will still work with HTTP refreshes.
+    }
   }
 
   /// Build GeoJSON Feature with LineString from run path (coordinates as [lng, lat]).
