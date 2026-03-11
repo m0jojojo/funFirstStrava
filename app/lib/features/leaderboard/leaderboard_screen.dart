@@ -18,12 +18,29 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   Future<void> _printIdToken() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      debugPrint('ID_TOKEN_FOR_POSTMAN: <no user signed in>');
       return;
     }
 
     final idToken = await user.getIdToken(true);
-    debugPrint('ID_TOKEN_FOR_POSTMAN: $idToken');
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Firebase ID token'),
+          content: SingleChildScrollView(
+            child: SelectableText(idToken),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
