@@ -16,6 +16,8 @@ export class LeaderboardService {
     { expiresAt: number; data: Array<{ userId: string; score: number }> }
   >();
   private static readonly TOP_CACHE_TTL_MS = 5000;
+  private readonly lastUpdateAtMs = new Map<string, number>();
+  private static readonly UPDATE_THROTTLE_MS = 10_000;
 
   constructor(
     @Inject(REDIS_CLIENT) private readonly redis: RedisClientType,
@@ -155,7 +157,19 @@ export class LeaderboardService {
     amount: number,
     scope: LeaderboardScope,
   ): Promise<void> {
+    const now = Date.now();
+    const last = this.lastUpdateAtMs.get(userId);
+    if (last !== undefined && now - last < LeaderboardService.UPDATE_THROTTLE_MS) {
+      this.logger.debug(
+        `Skipping leaderboard update for ${userId} (throttled, ${
+          now - last
+        }ms since last)`,
+      );
+      return;
+    }
+
     const result = await this.updateScoreAndDetectRank(userId, amount, scope);
+    this.lastUpdateAtMs.set(userId, now);
     if (!result.changed) return;
     this.gateway.broadcastRankChange({
       userId,

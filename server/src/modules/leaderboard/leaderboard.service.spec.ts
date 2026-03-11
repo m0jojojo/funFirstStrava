@@ -198,6 +198,33 @@ describe('LeaderboardService', () => {
 
     expect(mockGateway.broadcastRankChange).not.toHaveBeenCalled();
   });
+
+  it('updateScoreAndNotify should throttle repeated calls within window', async () => {
+    const scope: LeaderboardScope = { type: 'global' };
+    const spy = jest
+      .spyOn(service, 'updateScoreAndDetectRank')
+      .mockResolvedValue({
+        scope,
+        userId: 'user-throttle',
+        oldScore: 0,
+        oldRank: null,
+        newScore: 10,
+        newRank: 1,
+        changed: true,
+      });
+    const nowSpy = jest.spyOn(Date, 'now');
+
+    // All calls at t=0ms → only the first should go through, the rest throttled.
+    nowSpy.mockReturnValue(0);
+
+    await service.updateScoreAndNotify('user-throttle', 10, scope);
+    await service.updateScoreAndNotify('user-throttle', 10, scope);
+    await service.updateScoreAndNotify('user-throttle', 10, scope);
+
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    nowSpy.mockRestore();
+  });
 });
 
 
