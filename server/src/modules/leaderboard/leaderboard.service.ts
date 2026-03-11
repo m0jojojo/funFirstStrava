@@ -95,5 +95,37 @@ export class LeaderboardService {
       scoped.map((s) => this.incrementScore(userId, safeAmount, s)),
     );
   }
+
+  async updateScoreAndDetectRank(
+    userId: string,
+    amount: number,
+    scope: LeaderboardScope,
+  ): Promise<{
+    scope: LeaderboardScope;
+    userId: string;
+    oldScore: number | null;
+    oldRank: number | null;
+    newScore: number;
+    newRank: number;
+    changed: boolean;
+  }> {
+    const before = await this.getScoreAndRank(userId, scope);
+    const newScore = await this.incrementScore(userId, amount, scope);
+    const after = await this.getScoreAndRank(userId, scope);
+    const oldScore = before.score;
+    const oldRank = before.rank;
+    const newRank = after.rank ?? null;
+    const changed =
+      oldRank === null || newRank === null ? true : newRank !== oldRank;
+    return {
+      scope,
+      userId,
+      oldScore,
+      oldRank,
+      newScore,
+      newRank: newRank ?? 0,
+      changed,
+    };
+  }
 }
 

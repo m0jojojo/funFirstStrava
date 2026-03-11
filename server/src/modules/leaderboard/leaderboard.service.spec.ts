@@ -103,6 +103,34 @@ describe('LeaderboardService', () => {
       'user-3',
     );
   });
+
+  it('updateScoreAndDetectRank should report rank change when moving up', async () => {
+    const scope: LeaderboardScope = { type: 'global' };
+
+    // Before: score 10, rank 3
+    mockRedis.zScore
+      .mockResolvedValueOnce('10') // first getScoreAndRank
+      .mockResolvedValueOnce('30'); // second getScoreAndRank
+    mockRedis.zRevRank
+      .mockResolvedValueOnce(2) // old rank (3)
+      .mockResolvedValueOnce(0); // new rank (1)
+    mockRedis.zIncrBy.mockResolvedValueOnce(30);
+
+    const result = await service.updateScoreAndDetectRank('user-4', 20, scope);
+
+    expect(mockRedis.zScore).toHaveBeenCalledTimes(2);
+    expect(mockRedis.zRevRank).toHaveBeenCalledTimes(2);
+    expect(mockRedis.zIncrBy).toHaveBeenCalledWith(
+      'leaderboard:global',
+      20,
+      'user-4',
+    );
+    expect(result.changed).toBe(true);
+    expect(result.oldRank).toBe(3);
+    expect(result.newRank).toBe(1);
+    expect(result.oldScore).toBe(10);
+    expect(result.newScore).toBe(30);
+  });
 });
 
 
