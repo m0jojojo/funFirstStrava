@@ -146,6 +146,11 @@ class LeaderboardController extends ChangeNotifier {
     }
 
     final current = List<LeaderboardEntryView>.from(_state.entries);
+    final previousRanks = <String, int>{};
+    for (final e in current) {
+      previousRanks[e.userId] = e.rank;
+    }
+
     final index = current.indexWhere((e) => e.userId == userId);
 
     if (index == -1) {
@@ -172,8 +177,17 @@ class LeaderboardController extends ChangeNotifier {
     current.sort((a, b) => b.score.compareTo(a.score));
     final reRanked = <LeaderboardEntryView>[];
     for (var i = 0; i < current.length; i++) {
+      final entry = current[i];
+      final newRankValue = i + 1;
+      final oldRankValue = previousRanks[entry.userId];
+      final promoted =
+          oldRankValue != null && newRankValue < oldRankValue ? true : false;
+
       reRanked.add(
-        current[i].copyWith(rank: i + 1),
+        entry.copyWith(
+          rank: newRankValue,
+          justPromoted: promoted,
+        ),
       );
     }
 

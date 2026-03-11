@@ -26,25 +26,46 @@ class LeaderboardRow extends StatelessWidget {
                 ? const Color(0xFFCD7F32) // bronze
                 : colorScheme.primary;
 
-    final backgroundColor = entry.isCurrentUser
+    final baseBackground = entry.isCurrentUser
         ? const Color(0xFF202537)
         : const Color(0xFF181A22);
 
+    final highlightColor = const Color(0xFF2EE074);
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(18),
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            rankColor.withOpacity(isTopThree ? 0.35 : 0.14),
-            backgroundColor,
-          ],
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(
+          begin: entry.justPromoted ? 1.0 : 0.0,
+          end: 0.0,
         ),
-      ),
-      child: Row(
+        duration: const Duration(milliseconds: 1000),
+        curve: Curves.easeOutCubic,
+        builder: (context, t, child) {
+          final glow = t.clamp(0.0, 1.0);
+          final bgColor = Color.lerp(
+            baseBackground,
+            highlightColor,
+            glow * 0.7,
+          );
+
+          return Container(
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(18),
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  rankColor.withOpacity(isTopThree ? 0.35 : 0.14),
+                  bgColor ?? baseBackground,
+                ],
+              ),
+            ),
+            child: child,
+          );
+        },
+        child: Row(
         children: [
           Container(
             width: 40,
@@ -109,6 +130,7 @@ class LeaderboardRow extends StatelessWidget {
           ),
         ],
       ),
+    ),
     );
   }
 }

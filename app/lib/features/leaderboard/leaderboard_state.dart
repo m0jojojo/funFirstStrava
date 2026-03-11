@@ -8,6 +8,7 @@ class LeaderboardEntryView {
     required this.username,
     required this.score,
     this.isCurrentUser = false,
+    this.justPromoted = false,
   });
 
   final int rank;
@@ -15,6 +16,7 @@ class LeaderboardEntryView {
   final String username;
   final int score;
   final bool isCurrentUser;
+  final bool justPromoted;
 
   LeaderboardEntryView copyWith({
     int? rank,
@@ -22,6 +24,7 @@ class LeaderboardEntryView {
     String? username,
     int? score,
     bool? isCurrentUser,
+    bool? justPromoted,
   }) {
     return LeaderboardEntryView(
       rank: rank ?? this.rank,
@@ -29,6 +32,7 @@ class LeaderboardEntryView {
       username: username ?? this.username,
       score: score ?? this.score,
       isCurrentUser: isCurrentUser ?? this.isCurrentUser,
+      justPromoted: justPromoted ?? this.justPromoted,
     );
   }
 }
