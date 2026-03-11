@@ -71,13 +71,13 @@ export class RunsService {
     });
 
     // For any previous owners who lost tiles in this run, decrement their
-    // leaderboard score so the total reflects current territory, not just
-    // lifetime gains.
+    // leaderboard score (and notify) so the total reflects current territory,
+    // not just lifetime gains.
     const lostEntries = Object.entries(lostByUser ?? {});
     if (lostEntries.length > 0) {
       await Promise.all(
         lostEntries.map(([loserId, lostCount]) =>
-          this.leaderboardService.updateScore(
+          this.leaderboardService.updateScoreAndNotify(
             loserId,
             -Math.abs(Number(lostCount) || 0),
             { type: 'global' },
