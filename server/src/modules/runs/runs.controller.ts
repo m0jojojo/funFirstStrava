@@ -48,4 +48,17 @@ export class RunsController {
       tilesCaptured: r.tilesCaptured ?? undefined,
     }));
   }
+
+  /**
+   * One-time admin helper to backfill the global leaderboard from existing runs.
+   *
+   * Protected by FirebaseAuthGuard at the controller level. Call this once
+   * after deploying the Redis-based leaderboard to seed scores for users
+   * who had historical runs.
+   */
+  @Post('leaderboard-backfill')
+  @HttpCode(HttpStatus.OK)
+  async backfillLeaderboard() {
+    return this.runsService.backfillGlobalLeaderboardFromRuns();
+  }
 }

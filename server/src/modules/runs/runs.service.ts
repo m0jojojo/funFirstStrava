@@ -96,6 +96,50 @@ export class RunsService {
     }
     return total;
   }
+
+  /**
+   * One-time helper to backfill the global leaderboard from existing runs.
+   *
+   * It sums `tilesCaptured` per user across all historical runs and
+   * increments the global leaderboard score for each user by that amount.
+   *
+   * NOTE: If you already have users on the leaderboard from recent runs,
+   * this will add to their existing scores (i.e. may double-count those
+   * recent runs). Intended for a single use right after introducing Redis.
+   */
+  async backfillGlobalLeaderboardFromRuns(): Promise<{
+    usersUpdated: number;
+    totalTiles: number;
+  }> {
+    const allRuns = await this.runRepo.find({
+      where: {},
+    });
+
+    const totals = new Map<string, number>();
+    for (const run of allRuns) {
+      if (!run.tilesCaptured || run.tilesCaptured <= 0) continue;
+      const prev = totals.get(run.userId) ?? 0;
+      totals.set(run.userId, prev + run.tilesCaptured);
+    }
+
+    let usersUpdated = 0;
+    let totalTiles = 0;
+
+    for (const [userId, amount] of totals) {
+      if (!userId || amount <= 0) continue;
+      await this.leaderboardService.updateScore(userId, amount, {
+        type: 'global',
+      });
+      usersUpdated += 1;
+      totalTiles += amount;
+    }
+
+    this.logger.log(
+      `Backfilled global leaderboard from runs: users=${usersUpdated} totalTiles=${totalTiles}`,
+    );
+
+    return { usersUpdated, totalTiles };
+  }
 }
 
 /** Distance between two points in meters (Haversine). */
