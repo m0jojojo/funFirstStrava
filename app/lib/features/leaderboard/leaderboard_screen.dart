@@ -21,7 +21,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       return;
     }
 
-    final idToken = await user.getIdToken(true);
+    final idToken = await user.getIdToken(true) ?? '';
     if (!mounted) return;
 
     await showDialog<void>(
