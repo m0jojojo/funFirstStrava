@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'leaderboard_controller.dart';
 import 'leaderboard_state.dart';
 import 'widgets/animated_rank_list.dart';
@@ -12,6 +14,17 @@ class LeaderboardScreen extends StatefulWidget {
 
 class _LeaderboardScreenState extends State<LeaderboardScreen> {
   late final LeaderboardController _controller;
+
+  Future<void> _printIdToken() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      debugPrint('ID_TOKEN_FOR_POSTMAN: <no user signed in>');
+      return;
+    }
+
+    final idToken = await user.getIdToken(true);
+    debugPrint('ID_TOKEN_FOR_POSTMAN: $idToken');
+  }
 
   @override
   void initState() {
@@ -44,6 +57,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             elevation: 0,
             title: const Text('Global leaderboard'),
             centerTitle: false,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.bug_report_outlined),
+                tooltip: 'Print ID token',
+                onPressed: _printIdToken,
+              ),
+            ],
           ),
           body: Column(
             children: [
