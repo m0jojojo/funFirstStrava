@@ -11,6 +11,11 @@ export type LeaderboardScope =
 @Injectable()
 export class LeaderboardService {
   private readonly logger = new Logger(LeaderboardService.name);
+  private readonly topCache = new Map<
+    string,
+    { expiresAt: number; data: Array<{ userId: string; score: number }> }
+  >();
+  private static readonly TOP_CACHE_TTL_MS = 5000;
 
   constructor(
     @Inject(REDIS_CLIENT) private readonly redis: RedisClientType,
@@ -69,15 +74,27 @@ export class LeaderboardService {
     scope: LeaderboardScope,
     limit = 50,
   ): Promise<Array<{ userId: string; score: number }>> {
-    const key = this.getKey(scope);
     if (limit <= 0) return [];
+    const cacheKey = this.getTopCacheKey(scope, limit);
+    const now = Date.now();
+    const cached = this.topCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      return cached.data;
+    }
+
+    const key = this.getKey(scope);
     const end = limit - 1;
     // redis v5 client exposes zRangeWithScores with an options object for reverse ordering.
     const entries = await this.redis.zRangeWithScores(key, 0, end, { REV: true });
-    return entries.map((e) => ({
+    const mapped = entries.map((e) => ({
       userId: String(e.value),
       score: typeof e.score === 'number' ? e.score : Number(e.score),
     }));
+    this.topCache.set(cacheKey, {
+      expiresAt: now + LeaderboardService.TOP_CACHE_TTL_MS,
+      data: mapped,
+    });
+    return mapped;
   }
 
   /**
@@ -96,6 +113,7 @@ export class LeaderboardService {
     await Promise.all(
       scoped.map((s) => this.incrementScore(userId, safeAmount, s)),
     );
+    scoped.forEach((s) => this.invalidateTopCacheForScope(s));
   }
 
   async updateScoreAndDetectRank(
@@ -119,7 +137,7 @@ export class LeaderboardService {
     const newRank = after.rank ?? null;
     const changed =
       oldRank === null || newRank === null ? true : newRank !== oldRank;
-    return {
+    const result = {
       scope,
       userId,
       oldScore,
@@ -128,6 +146,8 @@ export class LeaderboardService {
       newRank: newRank ?? 0,
       changed,
     };
+    this.invalidateTopCacheForScope(scope);
+    return result;
   }
 
   async updateScoreAndNotify(
@@ -143,6 +163,20 @@ export class LeaderboardService {
       newRank: result.newRank,
       score: result.newScore,
     });
+  }
+
+  private getTopCacheKey(scope: LeaderboardScope, limit: number): string {
+    const base = this.getKey(scope);
+    return `${base}:${limit}`;
+  }
+
+  private invalidateTopCacheForScope(scope: LeaderboardScope): void {
+    const baseKey = this.getKey(scope);
+    for (const key of this.topCache.keys()) {
+      if (key.startsWith(baseKey)) {
+        this.topCache.delete(key);
+      }
+    }
   }
 }
 

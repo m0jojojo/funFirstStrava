@@ -113,6 +113,21 @@ describe('LeaderboardService', () => {
     );
   });
 
+  it('getTop should use in-memory cache within TTL', async () => {
+    const scope: LeaderboardScope = { type: 'global' };
+    mockRedis.zRangeWithScores.mockResolvedValueOnce([
+      { value: 'u1', score: 5 },
+    ]);
+
+    const first = await service.getTop(scope, 5);
+    const second = await service.getTop(scope, 5);
+
+    // Redis should have been called only once; second call hits cache.
+    expect(mockRedis.zRangeWithScores).toHaveBeenCalledTimes(1);
+    expect(first).toEqual([{ userId: 'u1', score: 5 }]);
+    expect(second).toEqual(first);
+  });
+
   it('updateScoreAndDetectRank should report rank change when moving up', async () => {
     const scope: LeaderboardScope = { type: 'global' };
 
