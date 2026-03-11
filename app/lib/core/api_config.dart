@@ -3,6 +3,6 @@
 /// For PRODUCTION: use default (Railway). Do not push API_BASE_URL override.
 const String apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'https://funfirststrava-dev.up.railway.app',
+  defaultValue: 'https://funfirststrava-production.up.railway.app',
 );
 ///const String apiBaseUrl = 'http://192.168.1.2:3000';
