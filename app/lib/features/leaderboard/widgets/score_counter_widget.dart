@@ -47,7 +47,7 @@ class _ScoreCounterWidgetState extends State<ScoreCounterWidget> {
       builder: (context, value, child) {
         final display = value.round();
         return Text(
-          '$display',
+          '$display tiles',
           style: theme.textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.w600,
             color: colorScheme.primary,

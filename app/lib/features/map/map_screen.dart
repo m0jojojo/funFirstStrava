@@ -53,7 +53,8 @@ class _MapScreenState extends State<MapScreen> {
   /// Fallback center: Sector 40 Gurgaon (when location unavailable). Position is (lng, lat).
   static const double _defaultLng = 77.054319;
   static const double _defaultLat = 28.449841;
-  static const double _defaultZoom = 14.0;
+  // Start closer in so tiles feel more "game-board" and less city-wide.
+  static const double _defaultZoom = 17.0;
 
   static const String _tilesSourceIdNeutral = 'tiles-neutral';
   static const String _tilesSourceIdYours = 'tiles-yours';
@@ -789,6 +790,7 @@ class _MapScreenState extends State<MapScreen> {
             MapWidget(
               key: const ValueKey('mapWidget'),
               cameraOptions: cameraOptions,
+              styleUri: 'mapbox://styles/mapbox/dark-v11',
               onMapCreated: _onMapCreated,
               onStyleLoadedListener: _onStyleLoaded,
               onMapIdleListener: _onMapIdle,
