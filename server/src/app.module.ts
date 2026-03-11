@@ -5,9 +5,10 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { RunsModule } from './modules/runs/runs.module';
 import { TilesModule } from './modules/tiles/tiles.module';
 import { UsersModule } from './modules/users/users.module';
+import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
 
 @Module({
-  imports: [DatabaseModule, NotificationsModule, UsersModule, TilesModule, RunsModule],
+  imports: [DatabaseModule, NotificationsModule, UsersModule, TilesModule, RunsModule, LeaderboardModule],
   controllers: [HealthController],
   providers: [],
 })
