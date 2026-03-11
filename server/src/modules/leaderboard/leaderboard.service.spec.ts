@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { LeaderboardService, type LeaderboardScope } from './leaderboard.service';
 import { REDIS_CLIENT } from '../redis/redis.constants';
+import { LeaderboardGateway } from './leaderboard.gateway';
 
 describe('LeaderboardService', () => {
   let service: LeaderboardService;
@@ -13,6 +14,10 @@ describe('LeaderboardService', () => {
     zRangeWithScores: jest.fn(),
   };
 
+  const mockGateway = {
+    broadcastRankChange: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
@@ -21,6 +26,10 @@ describe('LeaderboardService', () => {
         {
           provide: REDIS_CLIENT,
           useValue: mockRedis,
+        },
+        {
+          provide: LeaderboardGateway,
+          useValue: mockGateway,
         },
       ],
     }).compile();
@@ -130,6 +139,49 @@ describe('LeaderboardService', () => {
     expect(result.newRank).toBe(1);
     expect(result.oldScore).toBe(10);
     expect(result.newScore).toBe(30);
+  });
+
+  it('updateScoreAndNotify should emit event only when rank changes', async () => {
+    const scope: LeaderboardScope = { type: 'global' };
+
+    // Mock underlying rank detection to signal change.
+    const spy = jest
+      .spyOn(service, 'updateScoreAndDetectRank')
+      .mockResolvedValueOnce({
+        scope,
+        userId: 'user-5',
+        oldScore: 5,
+        oldRank: 4,
+        newScore: 15,
+        newRank: 2,
+        changed: true,
+      });
+
+    await service.updateScoreAndNotify('user-5', 10, scope);
+
+    expect(spy).toHaveBeenCalledWith('user-5', 10, scope);
+    expect(mockGateway.broadcastRankChange).toHaveBeenCalledWith({
+      userId: 'user-5',
+      scope,
+      newRank: 2,
+      score: 15,
+    });
+
+    // Now simulate no rank change.
+    mockGateway.broadcastRankChange.mockClear();
+    spy.mockResolvedValueOnce({
+      scope,
+      userId: 'user-5',
+      oldScore: 15,
+      oldRank: 2,
+      newScore: 20,
+      newRank: 2,
+      changed: false,
+    });
+
+    await service.updateScoreAndNotify('user-5', 5, scope);
+
+    expect(mockGateway.broadcastRankChange).not.toHaveBeenCalled();
   });
 });
 

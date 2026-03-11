@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { RedisClientType } from 'redis';
 import { REDIS_CLIENT } from '../redis/redis.constants';
+import { LeaderboardGateway } from './leaderboard.gateway';
 
 export type LeaderboardScope =
   | { type: 'global' }
@@ -13,6 +14,7 @@ export class LeaderboardService {
 
   constructor(
     @Inject(REDIS_CLIENT) private readonly redis: RedisClientType,
+    private readonly gateway: LeaderboardGateway,
   ) {}
 
   private getKey(scope: LeaderboardScope): string {
@@ -126,6 +128,21 @@ export class LeaderboardService {
       newRank: newRank ?? 0,
       changed,
     };
+  }
+
+  async updateScoreAndNotify(
+    userId: string,
+    amount: number,
+    scope: LeaderboardScope,
+  ): Promise<void> {
+    const result = await this.updateScoreAndDetectRank(userId, amount, scope);
+    if (!result.changed) return;
+    this.gateway.broadcastRankChange({
+      userId,
+      scope,
+      newRank: result.newRank,
+      score: result.newScore,
+    });
   }
 }
 

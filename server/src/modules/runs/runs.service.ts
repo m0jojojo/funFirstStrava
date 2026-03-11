@@ -64,8 +64,12 @@ export class RunsService {
     run.tilesCaptured = tilesCaptured;
     const saved = await this.runRepo.save(run);
 
-    // Phase 5: basic score update. For now, use tilesCaptured on global leaderboard.
-    await this.leaderboardService.updateScore(user.id, tilesCaptured, { type: 'global' });
+    // Phase 7: update leaderboard and notify if rank changed (global scope for now).
+    await this.leaderboardService.updateScoreAndNotify(
+      user.id,
+      tilesCaptured,
+      { type: 'global' },
+    );
 
     return saved;
   }

@@ -16,7 +16,7 @@ describe('RunsService + Leaderboard integration (Phase 5)', () => {
     captureTilesByPath: jest.fn().mockResolvedValue(3),
   };
   const mockLeaderboardService = {
-    updateScore: jest.fn().mockResolvedValue(undefined),
+    updateScoreAndNotify: jest.fn().mockResolvedValue(undefined),
   };
 
   beforeEach(async () => {
@@ -36,7 +36,7 @@ describe('RunsService + Leaderboard integration (Phase 5)', () => {
     service = module.get<RunsService>(RunsService);
   });
 
-  it('should call leaderboard.updateScore after saving run', async () => {
+  it('should call leaderboard.updateScoreAndNotify after saving run', async () => {
     const fakeUser: any = { id: 'user-123' };
     const path = [
       { lat: 1, lng: 1, t: 0 },
@@ -47,7 +47,7 @@ describe('RunsService + Leaderboard integration (Phase 5)', () => {
     await service.create(fakeUser, path);
 
     expect(mockTilesService.captureTilesByPath).toHaveBeenCalled();
-    expect(mockLeaderboardService.updateScore).toHaveBeenCalledWith(
+    expect(mockLeaderboardService.updateScoreAndNotify).toHaveBeenCalledWith(
       'user-123',
       3,
       { type: 'global' },
