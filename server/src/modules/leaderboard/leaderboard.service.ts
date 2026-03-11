@@ -100,6 +100,31 @@ export class LeaderboardService {
   }
 
   /**
+   * Hard reset the global leaderboard scores using absolute tile counts.
+   * This is intended for one-off or admin-triggered rebuilds so that
+   * Redis matches the current state in Postgres.
+   */
+  async replaceGlobalScores(
+    rows: Array<{ userId: string; score: number }>,
+  ): Promise<void> {
+    const scope: LeaderboardScope = { type: 'global' };
+    const key = this.getKey(scope);
+    await this.redis.del(key);
+    if (rows.length === 0) {
+      this.invalidateTopCacheForScope(scope);
+      return;
+    }
+    await this.redis.zAdd(
+      key,
+      rows.map((r) => ({
+        value: r.userId,
+        score: r.score,
+      })),
+    );
+    this.invalidateTopCacheForScope(scope);
+  }
+
+  /**
    * Generic entry point for other modules (runs/tiles) to apply a score delta
    * across one or more scopes. Later phases will add rank-change detection
    * and throttling on top of this method.

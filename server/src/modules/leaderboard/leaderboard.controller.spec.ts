@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { LeaderboardController } from './leaderboard.controller';
 import { LeaderboardService, type LeaderboardScope } from './leaderboard.service';
 import { UsersService } from '../users/users.service';
+import { TilesService } from '../tiles/tiles.service';
 
 describe('LeaderboardController', () => {
   let controller: LeaderboardController;
@@ -12,6 +13,9 @@ describe('LeaderboardController', () => {
   const mockUsersService = {
     findByIds: jest.fn(),
   } as unknown as jest.Mocked<UsersService>;
+  const mockTilesService = {
+    getLeaderboard: jest.fn(),
+  } as unknown as jest.Mocked<TilesService>;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -25,6 +29,10 @@ describe('LeaderboardController', () => {
         {
           provide: UsersService,
           useValue: mockUsersService,
+        },
+        {
+          provide: TilesService,
+          useValue: mockTilesService,
         },
       ],
     }).compile();

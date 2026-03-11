@@ -1,15 +1,14 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
-import {
-  LeaderboardService,
-  type LeaderboardScope,
-} from './leaderboard.service';
+import { Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
+import { LeaderboardService, type LeaderboardScope } from './leaderboard.service';
 import { UsersService } from '../users/users.service';
+import { TilesService } from '../tiles/tiles.service';
 
 @Controller('leaderboards')
 export class LeaderboardController {
   constructor(
     private readonly leaderboardService: LeaderboardService,
     private readonly usersService: UsersService,
+    private readonly tilesService: TilesService,
   ) {}
 
   @Get('global')
@@ -47,6 +46,23 @@ export class LeaderboardController {
     const scope: LeaderboardScope = { type: 'city', cityName };
     const entries = await this.leaderboardService.getTop(scope, n);
     return this.attachUsernames(entries);
+  }
+
+  /**
+   * Admin-only: rebuild the global leaderboard from current tile ownership.
+   *
+   * This clears the Redis global leaderboard and repopulates it so that
+   * each user's score equals the number of tiles they currently own
+   * in Postgres.
+   */
+  @Post('rebuild-from-tiles')
+  @HttpCode(HttpStatus.OK)
+  async rebuildFromTiles(): Promise<{ usersUpdated: number }> {
+    const rows = await this.tilesService.getLeaderboard(1_000_000);
+    await this.leaderboardService.replaceGlobalScores(
+      rows.map((r) => ({ userId: r.userId, score: r.tileCount })),
+    );
+    return { usersUpdated: rows.length };
   }
 
   @Get('user/:userId/global')
